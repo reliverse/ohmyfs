@@ -8,6 +8,7 @@ import type {
   ResolvedFileSystemNode,
   VariableValues,
 } from "~/types/filesystem-engine";
+import { logger } from "~/utils/logger";
 import { compareWithFilesystem, resolveDefinition } from "./evaluator";
 import { filterIgnoredEntries } from "./ignore-rules";
 import { calculateSafetyScore, validateChangesSafety } from "./safety";
@@ -22,7 +23,8 @@ import { calculateSafetyScore, validateChangesSafety } from "./safety";
 export async function generateDiff(
   definition: FileStructureDefinition,
   variables: VariableValues,
-  actualEntries: FileEntry[]
+  actualEntries: FileEntry[],
+  force = false
 ): Promise<FileSystemDiff> {
   // Filter actual entries based on ignore patterns
   const filteredActualEntries = filterIgnoredEntries(
@@ -36,11 +38,23 @@ export async function generateDiff(
   // Compare with actual filesystem
   const comparison = await compareWithFilesystem(
     resolved,
-    filteredActualEntries
+    filteredActualEntries,
+    force
+  );
+  logger.debug(
+    `Comparison results: missing=${comparison.missing.length}, extra=${comparison.extra.length}, matching=${comparison.matching.length}, conflicts=${comparison.conflicts.length}`
+  );
+  logger.debug(
+    "Missing items:",
+    comparison.missing.map((m) => `${m.type}: ${m.path}`)
   );
 
   // Generate changes
   const changes = generateChanges(comparison);
+  logger.debug(
+    `Generated ${changes.length} changes:`,
+    changes.map((c) => `${c.type}: ${c.path}`)
+  );
 
   // Calculate summary
   const summary = calculateSummary(changes);
@@ -48,6 +62,15 @@ export async function generateDiff(
   // Validate safety
   const safetyValidation = validateChangesSafety(changes);
   const safetyScore = calculateSafetyScore(changes);
+  logger.debug(
+    `Safety validation: ${safetyValidation.blockedChanges.length} blocked, ${safetyValidation.errors.length} errors, ${safetyValidation.warnings.length} warnings`
+  );
+  if (safetyValidation.blockedChanges.length > 0) {
+    logger.debug(
+      "Blocked changes:",
+      safetyValidation.blockedChanges.map((c) => `${c.type}: ${c.path}`)
+    );
+  }
 
   // Assess overall safety (combine our assessment with safety validation)
   const isSafe = assessSafety(changes) && safetyValidation.isSafe;
@@ -174,6 +197,12 @@ function createConflictChange(conflict: {
     type = "update_file_content";
     description = `Update file content: ${desired.name}`;
     isSafe = false; // Updating file content is potentially destructive
+  } else if (desired.type === "directory" && actual.isDirectory) {
+    // For directories in force mode, don't remove - just mark as no change
+    // The directory exists, which is what we want for bootstrap
+    type = "no_change";
+    description = `Directory already exists: ${desired.name}`;
+    isSafe = true;
   } else {
     // Type mismatch - need to remove and recreate
     type = getRemoveType(actual);
@@ -273,7 +302,10 @@ function nodeToFileEntry(node: ResolvedFileSystemNode): FileEntry {
     extension: undefined,
     mimeType: undefined,
     thumbnail: undefined,
-    metadata: node.metadata,
+    metadata: {
+      ...node.metadata,
+      resolvedContent: node.resolvedContent,
+    },
   };
 }
 

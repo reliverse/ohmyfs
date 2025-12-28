@@ -1,16 +1,53 @@
-import { dirname, extname, join, resolve, sep } from "@tauri-apps/api/path";
-import {
-  copyFile,
-  exists,
-  mkdir,
-  readDir,
-  readFile,
-  remove,
-  rename,
-  stat,
-  writeFile,
-} from "@tauri-apps/plugin-fs";
+import { invoke } from "@tauri-apps/api/core";
+import { basename, dirname, resolve, sep } from "@tauri-apps/api/path";
 import type { FileEntry, FileViewMode } from "~/types/file";
+
+interface RustFileEntry {
+  name: string;
+  path: string;
+  is_directory: boolean;
+  is_file: boolean;
+  is_symlink: boolean;
+  size?: number;
+  modified_at?: string;
+  created_at?: string;
+  permissions?: string;
+  extension?: string;
+}
+
+interface RustDirectoryContents {
+  directories: RustFileEntry[];
+  files: RustFileEntry[];
+}
+
+// Special folder path resolver using Tauri APIs
+export async function resolveSpecialFolderPath(
+  folderName: string
+): Promise<string> {
+  const { homeDir, join } = await import("@tauri-apps/api/path");
+
+  const userHome = await homeDir();
+
+  switch (folderName.toLowerCase()) {
+    case "home":
+      return userHome;
+    case "desktop":
+      return await join(userHome, "Desktop");
+    case "documents":
+      return await join(userHome, "Documents");
+    case "downloads":
+      return await join(userHome, "Downloads");
+    case "pictures":
+    case "images":
+      return await join(userHome, "Pictures");
+    case "music":
+      return await join(userHome, "Music");
+    case "videos":
+      return await join(userHome, "Videos");
+    default:
+      return `/${folderName}`;
+  }
+}
 
 // MIME type mapping for common file extensions
 const MIME_TYPES: Record<string, string> = {
@@ -93,6 +130,30 @@ const MIME_TYPES: Record<string, string> = {
 const WINDOWS_DRIVE_REGEX = /^[A-Za-z]:/;
 
 /**
+ * Transforms a Rust filesystem entry to a FileEntry
+ */
+function transformRustEntry(entry: RustFileEntry): FileEntry {
+  const extension = entry.extension || "";
+  return {
+    name: entry.name,
+    path: entry.path,
+    isDirectory: entry.is_directory,
+    isFile: entry.is_file,
+    isSymlink: entry.is_symlink,
+    size: entry.size || 0,
+    modifiedAt: entry.modified_at
+      ? new Date(Number.parseInt(entry.modified_at, 10))
+      : undefined,
+    createdAt: entry.created_at
+      ? new Date(Number.parseInt(entry.created_at, 10))
+      : undefined,
+    permissions: entry.permissions,
+    extension,
+    mimeType: getMimeType(extension),
+  };
+}
+
+/**
  * Validates a path to prevent path traversal attacks
  */
 export function validatePath(path: string): boolean {
@@ -147,41 +208,26 @@ export async function readDirectory(
 
     // Resolve the path to handle relative paths properly
     const resolvedPath = await resolve(path);
-    const entries = await readDir(resolvedPath);
+
+    // Call the Rust command
+    const result = (await invoke("read_directory", {
+      path: resolvedPath,
+      showHidden,
+    })) as RustDirectoryContents;
 
     const fileEntries: FileEntry[] = [];
 
-    for (const entry of entries) {
-      // Skip hidden files if not showing them
-      if (!showHidden && entry.name.startsWith(".")) {
-        continue;
-      }
-
-      const fullPath = await join(resolvedPath, entry.name);
-      const stats = await stat(fullPath);
-
-      const extension = await extname(entry.name);
-      const fileEntry: FileEntry = {
-        name: entry.name,
-        path: fullPath,
-        isDirectory: entry.isDirectory,
-        isFile: entry.isFile,
-        isSymlink: entry.isSymlink,
-        size: stats.size,
-        modifiedAt: stats.mtime ? new Date(stats.mtime) : undefined,
-        createdAt: stats.atime ? new Date(stats.atime) : undefined,
-        permissions: stats.mode?.toString(8),
-        extension,
-        mimeType: getMimeType(extension),
-      };
-
-      fileEntries.push(fileEntry);
+    // Process all entries using the helper function
+    for (const entry of [...result.directories, ...result.files]) {
+      fileEntries.push(transformRustEntry(entry));
     }
 
     return fileEntries;
   } catch (error) {
     console.error("Error reading directory:", error);
-    throw new Error(`Failed to read directory: ${path}`);
+    throw new Error(
+      `Failed to read directory: ${path}. ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
@@ -196,14 +242,22 @@ export async function readFileContent(
     }
 
     const resolvedPath = await resolve(path);
-    const content = await readFile(resolvedPath);
-    if (encoding === "utf8") {
-      return new TextDecoder().decode(content);
+
+    if (encoding === "binary") {
+      // For binary files, we need to implement a different approach
+      // For now, we'll only support text files
+      throw new Error("Binary file reading not yet implemented");
     }
+
+    const content = (await invoke("read_file", {
+      filePath: resolvedPath,
+    })) as string;
     return content;
   } catch (error) {
     console.error("Error reading file:", error);
-    throw new Error(`Failed to read file: ${path}`);
+    throw new Error(
+      `Failed to read file: ${path}. ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
@@ -215,10 +269,38 @@ export async function getFileStats(path: string) {
     }
 
     const resolvedPath = await resolve(path);
-    return await stat(resolvedPath);
+    // For now, we'll get stats by reading the directory containing the file
+    // This is a simplified approach - we could add a dedicated command if needed
+    const dirPath = await dirname(resolvedPath);
+    const fileName = await basename(resolvedPath);
+
+    const dirContents = (await invoke("read_directory", {
+      path: dirPath,
+      showHidden: true,
+    })) as RustDirectoryContents;
+
+    const allEntries = [...dirContents.directories, ...dirContents.files];
+    const entry = allEntries.find((e) => e.name === fileName);
+
+    if (!entry) {
+      throw new Error(`File not found: ${path}`);
+    }
+
+    return {
+      size: entry.size || 0,
+      mtime: entry.modified_at
+        ? new Date(Number.parseInt(entry.modified_at, 10))
+        : null,
+      atime: entry.created_at
+        ? new Date(Number.parseInt(entry.created_at, 10))
+        : null,
+      mode: entry.permissions ? Number.parseInt(entry.permissions, 8) : null,
+    };
   } catch (error) {
     console.error("Error getting file stats:", error);
-    throw new Error(`Failed to get file stats: ${path}`);
+    throw new Error(
+      `Failed to get file stats: ${path}. ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
@@ -230,7 +312,22 @@ export async function fileExists(path: string): Promise<boolean> {
     }
 
     const resolvedPath = await resolve(path);
-    return await exists(resolvedPath);
+    // For now, we'll check by trying to read the directory containing the file
+    // This is a simplified approach - we could add a dedicated command if needed
+    const dirPath = await dirname(resolvedPath);
+    const fileName = await basename(resolvedPath);
+
+    try {
+      const dirContents = (await invoke("read_directory", {
+        path: dirPath,
+        showHidden: true,
+      })) as RustDirectoryContents;
+
+      const allEntries = [...dirContents.directories, ...dirContents.files];
+      return allEntries.some((e) => e.name === fileName);
+    } catch {
+      return false;
+    }
   } catch {
     return false;
   }
@@ -244,10 +341,12 @@ export async function createDirectory(path: string): Promise<void> {
     }
 
     const resolvedPath = await resolve(path);
-    await mkdir(resolvedPath, { recursive: true });
+    await invoke("create_directory", { path: resolvedPath });
   } catch (error) {
     console.error("Error creating directory:", error);
-    throw new Error(`Failed to create directory: ${path}`);
+    throw new Error(
+      `Failed to create directory: ${path}. ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
@@ -259,10 +358,12 @@ export async function deleteFile(path: string): Promise<void> {
     }
 
     const resolvedPath = await resolve(path);
-    await remove(resolvedPath);
+    await invoke("delete_file", { path: resolvedPath });
   } catch (error) {
     console.error("Error deleting file:", error);
-    throw new Error(`Failed to delete: ${path}`);
+    throw new Error(
+      `Failed to delete: ${path}. ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
@@ -278,10 +379,15 @@ export async function renameFile(
 
     const resolvedOldPath = await resolve(oldPath);
     const resolvedNewPath = await resolve(newPath);
-    await rename(resolvedOldPath, resolvedNewPath);
+    await invoke("rename_file", {
+      oldPath: resolvedOldPath,
+      newPath: resolvedNewPath,
+    });
   } catch (error) {
     console.error("Error renaming file:", error);
-    throw new Error(`Failed to rename ${oldPath} to ${newPath}`);
+    throw new Error(
+      `Failed to rename ${oldPath} to ${newPath}. ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
@@ -297,10 +403,15 @@ export async function copyFileOperation(
 
     const resolvedSource = await resolve(source);
     const resolvedDestination = await resolve(destination);
-    await copyFile(resolvedSource, resolvedDestination);
+    await invoke("copy_file", {
+      sourcePath: resolvedSource,
+      destinationPath: resolvedDestination,
+    });
   } catch (error) {
     console.error("Error copying file:", error);
-    throw new Error(`Failed to copy ${source} to ${destination}`);
+    throw new Error(
+      `Failed to copy ${source} to ${destination}. ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
@@ -315,12 +426,17 @@ export async function writeFileContent(
     }
 
     const resolvedPath = await resolve(path);
-    const data =
-      typeof content === "string" ? new TextEncoder().encode(content) : content;
-    await writeFile(resolvedPath, data);
+    const contentString =
+      typeof content === "string" ? content : new TextDecoder().decode(content);
+    await invoke("write_file", {
+      filePath: resolvedPath,
+      content: contentString,
+    });
   } catch (error) {
     console.error("Error writing file:", error);
-    throw new Error(`Failed to write file: ${path}`);
+    throw new Error(
+      `Failed to write file: ${path}. ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 

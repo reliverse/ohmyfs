@@ -29,7 +29,6 @@ function AuthPage() {
     return isSignUp ? "Sign Up" : "Sign In";
   };
 
-  // Redirect if already authenticated
   if (isAuthenticated) {
     navigate({ to: "/", replace: true });
     return null;
@@ -112,12 +111,10 @@ function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md border-border bg-card p-8 backdrop-blur-sm">
         <div className="mb-6 text-center">
-          <h1 className="mb-2 font-bold text-3xl text-primary">
-            ohmyfs Launcher
-          </h1>
+          <h1 className="mb-2 font-bold text-3xl text-primary">OhMyFS</h1>
           <p className="text-muted-foreground">
             {isSignUp ? "Create your account" : "Sign in to continue"}
           </p>

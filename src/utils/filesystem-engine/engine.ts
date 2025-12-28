@@ -9,7 +9,7 @@ import type {
   ValidationResult,
   VariableValues,
 } from "~/types/filesystem-engine";
-
+import { logger } from "~/utils/logger";
 import { generateDiff } from "./diff-engine";
 import { resolveDefinition } from "./evaluator";
 import {
@@ -113,10 +113,15 @@ export class FileSystemEngine {
     }
 
     // Generate diff
-    const diff = await generateDiff(definition, variables, actualEntries);
+    const diff = await generateDiff(
+      definition,
+      variables,
+      actualEntries,
+      this.config.force
+    );
 
     if (this.config.verbose) {
-      console.log("Generated diff:", {
+      logger.debug("Generated diff:", {
         totalChanges: diff.changes.length,
         summary: diff.summary,
         isSafe: diff.isSafe,
@@ -139,7 +144,8 @@ export class FileSystemEngine {
     // Plan the changes
     const diff = await this.plan(definition, variables, actualEntries);
 
-    if (!diff.canExecute) {
+    // Skip canExecute check if force is enabled (for bootstrap mode)
+    if (!(this.config.force || diff.canExecute)) {
       throw new Error(`Cannot execute diff: ${diff.errors.join(", ")}`);
     }
 
@@ -155,7 +161,7 @@ export class FileSystemEngine {
     }
 
     if (this.config.verbose) {
-      console.log("Created execution plan:", {
+      logger.debug("Created execution plan:", {
         id: plan.id,
         changes: plan.changes.length,
         isDryRun: plan.isDryRun,
@@ -166,8 +172,24 @@ export class FileSystemEngine {
     // Execute the plan
     const executedPlan = await executePlan(plan, this.config, onProgress);
 
+    logger.debug("Execution completed:", {
+      status: executedPlan.status,
+      totalChanges: executedPlan.changes.length,
+      completedResults: executedPlan.results.filter(
+        (r) => r.status === "completed"
+      ).length,
+      failedResults: executedPlan.results.filter((r) => r.status === "failed")
+        .length,
+      results: executedPlan.results.map((r) => ({
+        id: r.changeId,
+        status: r.status,
+        path: executedPlan.changes.find((c) => c.id === r.changeId)?.path,
+        error: r.error,
+      })),
+    });
+
     if (this.config.verbose) {
-      console.log("Execution completed:", {
+      logger.debug("Execution completed:", {
         status: executedPlan.status,
         duration:
           executedPlan.endTime && executedPlan.startTime

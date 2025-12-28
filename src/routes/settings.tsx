@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ErrorBoundary } from "~/components/error-boundary";
 import SettingsPanel from "~/components/settings-panel";
 
 export const Route = createFileRoute("/settings")({
@@ -13,8 +12,8 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsPage() {
   return (
-    <ErrorBoundary>
+    <div className="container mx-auto h-full max-h-screen overflow-y-auto px-4 py-8">
       <SettingsPanel />
-    </ErrorBoundary>
+    </div>
   );
 }

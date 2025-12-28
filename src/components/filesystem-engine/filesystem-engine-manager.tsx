@@ -1,5 +1,13 @@
-import { Eye, Play, RotateCcw, Save, Settings, Upload } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  Download,
+  Eye,
+  Play,
+  RotateCcw,
+  Save,
+  Settings,
+  Upload,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -14,6 +22,11 @@ import type {
   VariableValues,
 } from "~/types/filesystem-engine";
 import { FileSystemEngine } from "~/utils/filesystem-engine/engine";
+import {
+  createShareableDefinition,
+  exportDefinition,
+  importDefinition,
+} from "~/utils/filesystem-engine/import-export";
 import { DiffViewer } from "./diff-viewer";
 import { ExecutionMonitor } from "./execution-monitor";
 import { StructureEditor } from "./structure-editor";
@@ -21,19 +34,13 @@ import { StructureEditor } from "./structure-editor";
 interface FileSystemEngineManagerProps {
   initialDefinition?: FileStructureDefinition;
   basePath?: string;
-  onDefinitionSave?: (definition: FileStructureDefinition) => void;
-  onDefinitionLoad?: () => Promise<FileStructureDefinition | null>;
 }
 
 export function FileSystemEngineManager({
   initialDefinition,
   basePath,
-  onDefinitionSave,
-  onDefinitionLoad,
 }: FileSystemEngineManagerProps) {
   const { toast } = useToast();
-
-  // State
   const [definition, setDefinition] = useState<FileStructureDefinition>(
     initialDefinition ||
       FileSystemEngine.createTemplate("My Project", basePath || "./my-project")
@@ -50,8 +57,8 @@ export function FileSystemEngineManager({
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionProgress, setExecutionProgress] = useState(0);
   const [actualEntries, setActualEntries] = useState<FileEntry[]>([]);
+  const processedBasePathsRef = useRef<Set<string>>(new Set());
 
-  // Engine instance
   const [engine] = useState(
     () =>
       new FileSystemEngine({
@@ -61,7 +68,35 @@ export function FileSystemEngineManager({
       })
   );
 
-  // Load actual filesystem state
+  const ensureBaseDirectory = useCallback(async () => {
+    const { fileExists, createDirectory } = await import("~/utils/file-system");
+
+    const hasProcessedPath = processedBasePathsRef.current.has(
+      definition.basePath
+    );
+    const basePathExists =
+      hasProcessedPath || (await fileExists(definition.basePath));
+
+    if (!basePathExists) {
+      console.warn(`Base path does not exist: ${definition.basePath}`);
+      await createDirectory(definition.basePath);
+      console.log(`Created directory: ${definition.basePath}`);
+      processedBasePathsRef.current.add(definition.basePath);
+      toast({
+        title: "Directory created",
+        description: `Created the base path "${definition.basePath}" since it didn't exist.`,
+      });
+    } else if (!hasProcessedPath) {
+      processedBasePathsRef.current.add(definition.basePath);
+    }
+  }, [definition.basePath, toast]);
+
+  const loadFilesystemEntries = useCallback(async () => {
+    const { readDirectory } = await import("~/utils/file-system");
+    const entries = await readDirectory(definition.basePath, true);
+    setActualEntries(entries);
+  }, [definition.basePath]);
+
   const loadActualFilesystem = useCallback(async () => {
     if (!definition.basePath) {
       return;
@@ -69,71 +104,23 @@ export function FileSystemEngineManager({
 
     try {
       setIsLoading(true);
-      const { readDir, exists } = await import("@tauri-apps/plugin-fs");
-
-      // Check if base path exists
-      const basePathExists = await exists(definition.basePath);
-      if (!basePathExists) {
-        console.warn(`Base path does not exist: ${definition.basePath}`);
-        try {
-          const { mkdir } = await import("@tauri-apps/plugin-fs");
-          await mkdir(definition.basePath, { recursive: true });
-          console.log(`Created directory: ${definition.basePath}`);
-          toast({
-            title: "Directory created",
-            description: `Created the base path "${definition.basePath}" since it didn't exist.`,
-          });
-        } catch (mkdirError) {
-          console.error("Failed to create directory:", mkdirError);
-          toast({
-            title: "Path not found",
-            description: `The base path "${definition.basePath}" does not exist and could not be created. Please check the path in the structure definition.`,
-            variant: "destructive",
-          });
-          setActualEntries([]);
-          return;
-        }
-      }
-
-      // Recursively read directory structure
-      const readDirectoryRecursive = async (
-        path: string
-      ): Promise<FileEntry[]> => {
-        const entries: FileEntry[] = [];
-
-        try {
-          const items = await readDir(path);
-
-          for (const item of items) {
-            const entry: FileEntry = {
-              name: item.name || "",
-              path: `${path}/${item.name}`,
-              isDirectory: item.isDirectory,
-              isFile: item.isFile,
-              isSymlink: item.isSymlink,
-              size: undefined, // Would need additional API calls
-              modifiedAt: undefined,
-              createdAt: undefined,
-              permissions: undefined,
-              extension: item.name?.split(".").pop(),
-              mimeType: undefined,
-              thumbnail: undefined,
-              metadata: undefined,
-            };
-
-            entries.push(entry);
-          }
-        } catch (error) {
-          console.warn(`Failed to read directory ${path}:`, error);
-        }
-
-        return entries;
-      };
-
-      const entries = await readDirectoryRecursive(definition.basePath);
-      setActualEntries(entries);
+      await ensureBaseDirectory();
+      await loadFilesystemEntries();
     } catch (error) {
       console.error("Filesystem loading error:", error);
+
+      if (error instanceof Error && error.message.includes("directory")) {
+        // Directory creation failed
+        toast({
+          title: "Path not found",
+          description: `The base path "${definition.basePath}" does not exist and could not be created.`,
+          variant: "destructive",
+        });
+        setActualEntries([]);
+        return;
+      }
+
+      // General filesystem error
       toast({
         title: "Error loading filesystem",
         description:
@@ -145,9 +132,8 @@ export function FileSystemEngineManager({
     } finally {
       setIsLoading(false);
     }
-  }, [definition.basePath, toast]);
+  }, [definition.basePath, ensureBaseDirectory, loadFilesystemEntries, toast]);
 
-  // Generate diff
   const generateDiff = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -179,7 +165,6 @@ export function FileSystemEngineManager({
     toast,
   ]);
 
-  // Execute changes
   const executeChanges = useCallback(async () => {
     if (!diff) {
       return;
@@ -239,66 +224,6 @@ export function FileSystemEngineManager({
     toast,
   ]);
 
-  // Save definition
-  const saveDefinition = useCallback(() => {
-    try {
-      if (onDefinitionSave) {
-        onDefinitionSave(definition);
-      } else {
-        // Default save to localStorage
-        localStorage.setItem("fs-definition", JSON.stringify(definition));
-      }
-
-      toast({
-        title: "Definition saved",
-        description: "Filesystem definition has been saved successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Save failed",
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive",
-      });
-    }
-  }, [definition, onDefinitionSave, toast]);
-
-  // Load definition
-  const loadDefinition = useCallback(async () => {
-    try {
-      let loadedDefinition: FileStructureDefinition | null = null;
-
-      if (onDefinitionLoad) {
-        loadedDefinition = await onDefinitionLoad();
-      } else {
-        // Default load from localStorage
-        const stored = localStorage.getItem("fs-definition");
-        if (stored) {
-          loadedDefinition = JSON.parse(stored);
-        }
-      }
-
-      if (loadedDefinition) {
-        setDefinition(loadedDefinition);
-        toast({
-          title: "Definition loaded",
-          description: "Filesystem definition has been loaded successfully",
-        });
-      } else {
-        toast({
-          title: "No definition found",
-          description: "No saved definition was found to load",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Load failed",
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive",
-      });
-    }
-  }, [onDefinitionLoad, toast]);
-
-  // Reset to initial state
   const reset = useCallback(() => {
     setDiff(null);
     setExecutionPlan(null);
@@ -306,7 +231,63 @@ export function FileSystemEngineManager({
     setExecutionProgress(0);
   }, []);
 
-  // Load filesystem state when definition changes
+  const exportCurrentDefinition = useCallback(async () => {
+    try {
+      await exportDefinition(definition);
+      toast({
+        title: "Definition exported",
+        description: "Filesystem definition has been exported successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  }, [definition, toast]);
+
+  const importDefinitionFile = useCallback(async () => {
+    try {
+      const importedDefinition = await importDefinition();
+      setDefinition(importedDefinition);
+      // Reset state when importing new definition
+      setDiff(null);
+      setExecutionPlan(null);
+      setCurrentTab("edit");
+      toast({
+        title: "Definition imported",
+        description: `"${importedDefinition.name}" has been imported successfully`,
+      });
+    } catch (error) {
+      toast({
+        title: "Import failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  const createShareableFile = useCallback(async () => {
+    try {
+      await createShareableDefinition(definition);
+      toast({
+        title: "Shareable file created",
+        description: "Shareable definition file has been created successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Shareable file creation failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    }
+  }, [definition, toast]);
+
+  useEffect(() => {
+    processedBasePathsRef.current.clear();
+  }, []);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadActualFilesystem is intentionally omitted to prevent infinite re-renders
   useEffect(() => {
     if (definition.basePath) {
@@ -326,13 +307,17 @@ export function FileSystemEngineManager({
         </div>
 
         <div className="flex gap-2">
-          <Button onClick={loadDefinition} variant="outline">
+          <Button onClick={importDefinitionFile} variant="outline">
             <Upload className="mr-1 h-4 w-4" />
-            Load
+            Import
           </Button>
-          <Button onClick={saveDefinition} variant="outline">
+          <Button onClick={exportCurrentDefinition} variant="outline">
+            <Download className="mr-1 h-4 w-4" />
+            Export
+          </Button>
+          <Button onClick={createShareableFile} variant="outline">
             <Save className="mr-1 h-4 w-4" />
-            Save
+            Share
           </Button>
           <Button onClick={reset} variant="outline">
             <RotateCcw className="mr-1 h-4 w-4" />

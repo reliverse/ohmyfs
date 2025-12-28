@@ -1,5 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
+import {
+  createRootRouteWithContext,
+  Outlet,
+  useLocation,
+} from "@tanstack/react-router";
+import { MainLayout } from "~/components/main-layout";
 import { ToasterProvider } from "~/components/toaster";
 
 // import { TanStackDevtools } from "@tanstack/react-devtools";
@@ -16,12 +21,24 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 // Simplified component for Tauri/Vite setup (no SSR)
 function RootComponent() {
+  const location = useLocation();
   // Only show devtools in development to prevent performance issues
   // const isDevelopment = import.meta.env.DEV;
 
+  // Hide sidebar for specific routes
+  const hideSidebarRoutes = [
+    "/filesystem-engine",
+    "/settings",
+    "/auth",
+    "/account",
+  ];
+  const showSidebar = !hideSidebarRoutes.includes(location.pathname);
+
   return (
-    <>
-      <Outlet />
+    <div className="min-h-screen bg-background">
+      <MainLayout showSidebar={showSidebar}>
+        <Outlet />
+      </MainLayout>
       <ToasterProvider />
       {/* {isDevelopment && (
         <TanStackDevtools
@@ -37,6 +54,6 @@ function RootComponent() {
           ]}
         />
       )} */}
-    </>
+    </div>
   );
 }

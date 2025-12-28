@@ -28,6 +28,7 @@ import { cn } from "~/lib/utils";
 import type { FileEntry, FileViewMode } from "~/types/file";
 import { isSupportedArchive } from "~/utils/compression";
 import { formatDate, formatFileSize } from "~/utils/file-system";
+import { EnhancedContextMenuContent } from "./structure-context-menu";
 
 interface FileListProps {
   files: FileEntry[];
@@ -36,6 +37,8 @@ interface FileListProps {
   onNavigate: (path: string) => void;
   viewMode: FileViewMode;
   onPreview?: (file: FileEntry) => void;
+  onOpenStructureEditor?: (path: string) => void;
+  onOpenQuickPanel?: () => void;
 }
 
 interface FileItemProps {
@@ -57,20 +60,24 @@ interface FileItemProps {
   onPreview?: (file: FileEntry) => void;
   onProperties?: (file: FileEntry) => void;
   canPaste: boolean;
+  onOpenStructureEditor?: (path: string) => void;
+  onOpenQuickPanel?: () => void;
 }
 
 function GridFileItem({
-  file,
-  isSelected,
-  currentPath,
-  onClick,
-  onDoubleClick,
-  onContextMenu,
-  onToggleSelect,
-  onOpen,
-  onPreview,
-  onProperties,
-  canPaste,
+  file: _file,
+  isSelected: _isSelected,
+  currentPath: _currentPath,
+  onClick: _onClick,
+  onDoubleClick: _onDoubleClick,
+  onContextMenu: _onContextMenu,
+  onToggleSelect: _onToggleSelect,
+  onOpen: _onOpen,
+  onPreview: _onPreview,
+  onProperties: _onProperties,
+  canPaste: _canPaste,
+  onOpenStructureEditor,
+  onOpenQuickPanel,
 }: Omit<
   FileItemProps,
   | "viewMode"
@@ -83,18 +90,18 @@ function GridFileItem({
 >) {
   const handleClick = useCallback(
     (event?: React.MouseEvent) => {
-      onClick(file, event);
+      _onClick(_file, event);
     },
-    [file, onClick]
+    [_file, _onClick]
   );
 
   const handleDoubleClick = useCallback(() => {
-    onDoubleClick(file);
-  }, [file, onDoubleClick]);
+    _onDoubleClick(_file);
+  }, [_file, _onDoubleClick]);
 
   const handleContextMenu = useCallback(() => {
-    onContextMenu(file);
-  }, [file, onContextMenu]);
+    _onContextMenu(_file);
+  }, [_file, _onContextMenu]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -112,7 +119,7 @@ function GridFileItem({
         <button
           className={cn(
             "group relative cursor-pointer rounded-lg border p-3 transition-colors",
-            isSelected
+            _isSelected
               ? "border-accent-foreground/20 bg-accent"
               : "border-transparent hover:border-accent-foreground/10 hover:bg-accent/50"
           )}
@@ -125,15 +132,15 @@ function GridFileItem({
           {/* Selection checkbox */}
           <div className="absolute top-2 left-2 z-10">
             <Checkbox
-              checked={isSelected}
+              checked={_isSelected}
               className="opacity-0 transition-opacity group-hover:opacity-100"
-              onCheckedChange={() => onToggleSelect(file)}
+              onCheckedChange={() => _onToggleSelect(_file)}
             />
           </div>
 
           {/* File icon */}
           <div className="mb-2 flex flex-col items-center gap-2">
-            {file.isDirectory ? (
+            {_file.isDirectory ? (
               <FolderIcon className="h-12 w-12 text-blue-500" />
             ) : (
               <FileIcon className="h-12 w-12 text-muted-foreground" />
@@ -142,34 +149,38 @@ function GridFileItem({
 
           {/* File name */}
           <div className="text-center">
-            <p className="truncate font-medium text-sm" title={file.name}>
-              {file.name}
+            <p className="truncate font-medium text-sm" title={_file.name}>
+              {_file.name}
             </p>
           </div>
         </button>
       </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onClick={() => onOpen?.(file)}>Open</ContextMenuItem>
-        {file.isFile && isSupportedArchive(file.name) && (
-          <ExtractionDialog currentPath={currentPath} file={file}>
+      <EnhancedContextMenuContent
+        file={_file}
+        onOpenQuickPanel={onOpenQuickPanel}
+        onOpenStructureEditor={onOpenStructureEditor}
+      >
+        <ContextMenuItem onClick={() => _onOpen?.(_file)}>Open</ContextMenuItem>
+        {_file.isFile && isSupportedArchive(_file.name) && (
+          <ExtractionDialog currentPath={_currentPath} file={_file}>
             <ContextMenuItem onClick={(e) => e.preventDefault()}>
               <Archive className="mr-2 h-4 w-4" />
               Extract Here
             </ContextMenuItem>
           </ExtractionDialog>
         )}
-        {file.isFile && (
-          <ContextMenuItem onClick={() => onPreview?.(file)}>
+        {_file.isFile && (
+          <ContextMenuItem onClick={() => _onPreview?.(_file)}>
             Preview
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />
-        {canPaste && <ContextMenuItem>Paste</ContextMenuItem>}
+        {_canPaste && <ContextMenuItem>Paste</ContextMenuItem>}
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => onProperties?.(file)}>
+        <ContextMenuItem onClick={() => _onProperties?.(_file)}>
           Properties
         </ContextMenuItem>
-      </ContextMenuContent>
+      </EnhancedContextMenuContent>
     </ContextMenu>
   );
 }
@@ -307,6 +318,8 @@ function FileItem({
   onPreview,
   onProperties,
   canPaste,
+  onOpenStructureEditor,
+  onOpenQuickPanel,
 }: FileItemProps) {
   if (viewMode.type === "grid") {
     return (
@@ -319,6 +332,8 @@ function FileItem({
         onContextMenu={onContextMenu}
         onDoubleClick={onDoubleClick}
         onOpen={onOpen}
+        onOpenQuickPanel={onOpenQuickPanel}
+        onOpenStructureEditor={onOpenStructureEditor}
         onPreview={onPreview}
         onProperties={onProperties}
         onToggleSelect={onToggleSelect}
@@ -339,13 +354,15 @@ function FileItem({
   );
 }
 
-export function FileList({
+function FileList({
   files,
   groupedFiles,
   currentPath,
   onNavigate,
   viewMode,
   onPreview,
+  onOpenStructureEditor,
+  onOpenQuickPanel,
 }: FileListProps) {
   const {
     setClipboard,
@@ -369,40 +386,64 @@ export function FileList({
   const itemHeight = useItemHeight(viewMode);
   const containerHeight = useContainerHeight();
 
+  const handleRangeSelection = useCallback(
+    (index: number) => {
+      const startIndex = Math.min(lastSelectedIndex, index);
+      const endIndex = Math.max(lastSelectedIndex, index);
+      const rangeSelection = files
+        .slice(startIndex, endIndex + 1)
+        .map((f) => f.path);
+      setSelectedItems(rangeSelection);
+    },
+    [files, lastSelectedIndex, setSelectedItems]
+  );
+
+  const handleToggleSelection = useCallback(
+    (file: FileEntry, index: number) => {
+      if (currentSelectedItems.includes(file.path)) {
+        removeSelectedItem(file.path);
+      } else {
+        addSelectedItem(file.path);
+        setLastSelectedIndex(index);
+      }
+    },
+    [currentSelectedItems, addSelectedItem, removeSelectedItem]
+  );
+
+  const handleSingleSelection = useCallback(
+    (file: FileEntry, index: number) => {
+      setSelectedItems([file.path]);
+      setLastSelectedIndex(index);
+    },
+    [setSelectedItems]
+  );
+
   const handleFileClick = useCallback(
     (file: FileEntry, index: number, event?: React.MouseEvent) => {
       const isCtrlPressed = event ? event.ctrlKey || event.metaKey : false;
       const isShiftPressed = event ? event.shiftKey : false;
 
+      // Single click navigation for folders (no modifier keys)
+      if (file.isDirectory && !isCtrlPressed && !isShiftPressed) {
+        onNavigate(file.path);
+        return;
+      }
+
+      // Handle selection logic
       if (isShiftPressed && lastSelectedIndex !== -1) {
-        // Range selection
-        const startIndex = Math.min(lastSelectedIndex, index);
-        const endIndex = Math.max(lastSelectedIndex, index);
-        const rangeSelection = files
-          .slice(startIndex, endIndex + 1)
-          .map((f) => f.path);
-        setSelectedItems(rangeSelection);
+        handleRangeSelection(index);
       } else if (isCtrlPressed) {
-        // Toggle selection
-        if (currentSelectedItems.includes(file.path)) {
-          removeSelectedItem(file.path);
-        } else {
-          addSelectedItem(file.path);
-          setLastSelectedIndex(index);
-        }
+        handleToggleSelection(file, index);
       } else {
-        // Single selection
-        setSelectedItems([file.path]);
-        setLastSelectedIndex(index);
+        handleSingleSelection(file, index);
       }
     },
     [
-      files,
-      currentSelectedItems,
+      onNavigate,
       lastSelectedIndex,
-      addSelectedItem,
-      removeSelectedItem, // Single selection
-      setSelectedItems,
+      handleRangeSelection,
+      handleToggleSelection,
+      handleSingleSelection,
     ]
   );
 
@@ -543,6 +584,8 @@ export function FileList({
                     onDelete={handleDelete}
                     onDoubleClick={handleFileDoubleClick}
                     onOpen={handleOpen}
+                    onOpenQuickPanel={onOpenQuickPanel}
+                    onOpenStructureEditor={onOpenStructureEditor}
                     onOpenWith={handleOpenWith}
                     onPaste={handlePaste}
                     onPreview={handlePreview}
@@ -579,6 +622,8 @@ export function FileList({
         onDelete={handleDelete}
         onDoubleClick={handleFileDoubleClick}
         onOpen={handleOpen}
+        onOpenQuickPanel={onOpenQuickPanel}
+        onOpenStructureEditor={onOpenStructureEditor}
         onOpenWith={handleOpenWith}
         onPaste={handlePaste}
         onPreview={handlePreview}
@@ -655,3 +700,6 @@ export function FileList({
     </div>
   );
 }
+
+export { FileList };
+export type { FileListProps, FileItemProps };

@@ -15,6 +15,7 @@ import type {
   RecentItem,
   SearchResult,
 } from "~/types/file";
+import type { FileStructureDefinition } from "~/types/filesystem-engine";
 
 // Action types
 type FileManagerAction =
@@ -40,7 +41,11 @@ type FileManagerAction =
     }
   | { type: "REMOVE_OPERATION"; payload: string }
   | { type: "SET_SEARCH_RESULTS"; payload: SearchResult | undefined }
-  | { type: "LOAD_STATE"; payload: Partial<FileManagerState> };
+  | { type: "LOAD_STATE"; payload: Partial<FileManagerState> }
+  | { type: "SET_STRUCTURE_PANEL_OPEN"; payload: boolean }
+  | { type: "SET_STRUCTURE_EDITOR_PATH"; payload: string | null }
+  | { type: "ADD_STRUCTURE_HISTORY"; payload: FileStructureDefinition }
+  | { type: "SET_STRUCTURE_HISTORY"; payload: FileStructureDefinition[] };
 
 // Initial state
 const initialState: FileManagerState = {
@@ -61,6 +66,10 @@ const initialState: FileManagerState = {
   recentItems: [],
   operations: [],
   isLoading: false,
+  // Structure-related initial state
+  structurePanelOpen: false,
+  structureEditorPath: null,
+  structureHistory: [],
 };
 
 // Reducer
@@ -147,6 +156,19 @@ function fileManagerReducer(
       return { ...state, searchResults: action.payload };
     case "LOAD_STATE":
       return { ...state, ...action.payload };
+    case "SET_STRUCTURE_PANEL_OPEN":
+      return { ...state, structurePanelOpen: action.payload };
+    case "SET_STRUCTURE_EDITOR_PATH":
+      return { ...state, structureEditorPath: action.payload };
+    case "ADD_STRUCTURE_HISTORY": {
+      const newHistory = [action.payload, ...state.structureHistory].slice(
+        0,
+        10
+      );
+      return { ...state, structureHistory: newHistory };
+    }
+    case "SET_STRUCTURE_HISTORY":
+      return { ...state, structureHistory: action.payload };
     default:
       return state;
   }
@@ -177,6 +199,11 @@ const FileManagerContext = createContext<{
     removeOperation: (id: string) => void;
     setSearchResults: (results?: SearchResult) => void;
     loadState: (state: Partial<FileManagerState>) => void;
+    // Structure-related actions
+    setStructurePanelOpen: (open: boolean) => void;
+    setStructureEditorPath: (path: string | null) => void;
+    addStructureHistory: (definition: FileStructureDefinition) => void;
+    setStructureHistory: (history: FileStructureDefinition[]) => void;
   };
 } | null>(null);
 
@@ -288,6 +315,23 @@ export function FileManagerProvider({
 
     loadState: useCallback((state: Partial<FileManagerState>) => {
       dispatch({ type: "LOAD_STATE", payload: state });
+    }, []),
+
+    // Structure-related actions
+    setStructurePanelOpen: useCallback((open: boolean) => {
+      dispatch({ type: "SET_STRUCTURE_PANEL_OPEN", payload: open });
+    }, []),
+
+    setStructureEditorPath: useCallback((path: string | null) => {
+      dispatch({ type: "SET_STRUCTURE_EDITOR_PATH", payload: path });
+    }, []),
+
+    addStructureHistory: useCallback((definition: FileStructureDefinition) => {
+      dispatch({ type: "ADD_STRUCTURE_HISTORY", payload: definition });
+    }, []),
+
+    setStructureHistory: useCallback((history: FileStructureDefinition[]) => {
+      dispatch({ type: "SET_STRUCTURE_HISTORY", payload: history });
     }, []),
   };
 

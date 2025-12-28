@@ -1,0 +1,221 @@
+{
+  "name": "Full-Stack Web App",
+  "description": "Complete MERN stack application example",
+  "version": "1.0.0",
+  "basePath": "./my-fullstack-app",
+  "variables": [
+    {
+      "name": "projectName",
+      "type": "string",
+      "defaultValue": "my-fullstack-app",
+      "description": "Name of the full-stack application"
+    },
+    {
+      "name": "author",
+      "type": "string",
+      "defaultValue": "Jon Snow",
+      "description": "Project author"
+    },
+    {
+      "name": "frontendPort",
+      "type": "number",
+      "defaultValue": 3000,
+      "description": "Port for the frontend development server"
+    },
+    {
+      "name": "backendPort",
+      "type": "number",
+      "defaultValue": 5000,
+      "description": "Port for the backend API server"
+    }
+  ],
+  "structure": [
+    {
+      "type": "directory",
+      "name": "{{projectName}}",
+      "description": "Root project directory",
+      "children": [
+        {
+          "type": "file",
+          "name": "README.md",
+          "description": "Project documentation",
+          "content": {
+            "content": "# {{projectName}}\n\nA full-stack web application built with modern technologies.\n\n## Features\n\n- React frontend with TypeScript\n- Node.js/Express backend\n- MongoDB database\n- JWT authentication\n- Modern development tooling\n\n## Getting Started\n\n### Prerequisites\n\n- Node.js 18+\n- MongoDB\n- npm or yarn\n\n### Installation\n\n1. Clone the repository\n2. Install dependencies:\n   ```bash\n   npm run install:all\n   ```\n3. Start the development servers:\n   ```bash\n   npm run dev\n   ```\n\n## Project Structure\n\n```\n{{projectName}}/\n├── frontend/          # React application\n├── backend/           # Express API server\n├── docs/              # Documentation\n└── scripts/           # Build and deployment scripts\n```\n\n## Available Scripts\n\n- `npm run dev` - Start all development servers\n- `npm run build` - Build for production\n- `npm run test` - Run all tests\n- `npm run install:all` - Install dependencies for all workspaces\n\n## Contributing\n\n1. Fork the repository\n2. Create a feature branch\n3. Make your changes\n4. Run tests\n5. Submit a pull request\n\n## License\n\nThis project is licensed under the MIT License - see the LICENSE file for details.\n\n---\n\n**Author:** {{author}}",
+            "encoding": "utf8"
+          }
+        },
+        {
+          "type": "file",
+          "name": "package.json",
+          "description": "Root package.json with workspaces",
+          "content": {
+            "content": "{\n  \"name\": \"{{projectName}}\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Full-stack web application\",\n  \"author\": \"{{author}}\",\n  \"private\": true,\n  \"workspaces\": [\n    \"frontend\",\n    \"backend\"\n  ],\n  \"scripts\": {\n    \"dev\": \"concurrently \\\"npm run dev --workspace=backend\\\" \\\"npm run dev --workspace=frontend\\\"\",\n    \"build\": \"npm run build --workspaces\",\n    \"install:all\": \"npm install\",\n    \"test\": \"npm run test --workspaces\",\n    \"clean\": \"npm run clean --workspaces\"\n  },\n  \"devDependencies\": {\n    \"concurrently\": \"^8.2.0\"\n  }\n}",
+            "encoding": "utf8"
+          }
+        },
+        {
+          "type": "file",
+          "name": ".gitignore",
+          "description": "Git ignore file",
+          "content": {
+            "content": "# Dependencies\nnode_modules/\n\n# Environment variables\n.env\n.env.local\n.env.development.local\n.env.test.local\n.env.production.local\n\n# Build outputs\ndist/\nbuild/\n\n# IDE\n.vscode/\n.idea/\n*.swp\n*.swo\n\n# OS\n.DS_Store\nThumbs.db\n\n# Logs\nlogs\n*.log\nnpm-debug.log*\nyarn-debug.log*\nyarn-error.log*\n\n# Runtime data\npids\n*.pid\n*.seed\n*.pid.lock\n\n# Coverage directory used by tools like istanbul\ncoverage/\n*.lcov\n\n# nyc test coverage\n.nyc_output\n\n# Dependency directories\njspm_packages/\n\n# Optional npm cache directory\n.npm\n\n# Optional eslint cache\n.eslintcache\n\n# Microbundle cache\n.rpt2_cache/\n.rts2_cache_cjs/\n.rts2_cache_es/\n.rts2_cache_umd/\n\n# Optional REPL history\n.node_repl_history\n\n# Output of 'npm pack'\n*.tgz\n\n# Yarn Integrity file\n.yarn-integrity\n\n# dotenv environment variables file\n.env.test\n\n# parcel-bundler cache (https://parceljs.org/)\n.cache\n.parcel-cache\n\n# Next.js build output\n.next\n\n# Nuxt.js build / generate output\n.nuxt\ndist\n\n# Gatsby files\n.cache/\npublic\n\n# Storybook build outputs\n.out\n.storybook-out\n\n# Temporary folders\ntmp/\ntemp/",
+            "encoding": "utf8"
+          }
+        },
+        {
+          "type": "directory",
+          "name": "frontend",
+          "description": "React frontend application",
+          "children": [
+            {
+              "type": "file",
+              "name": "package.json",
+              "content": {
+                "content": "{\n  \"name\": \"{{projectName}}-frontend\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"dependencies\": {\n    \"@types/node\": \"^16.18.0\",\n    \"@types/react\": \"^18.2.0\",\n    \"@types/react-dom\": \"^18.2.0\",\n    \"react\": \"^18.2.0\",\n    \"react-dom\": \"^18.2.0\",\n    \"react-router-dom\": \"^6.8.0\",\n    \"axios\": \"^1.3.0\",\n    \"react-query\": \"^3.39.0\",\n    \"@emotion/react\": \"^11.10.0\",\n    \"@emotion/styled\": \"^11.10.0\",\n    \"@mui/material\": \"^5.11.0\",\n    \"@mui/icons-material\": \"^5.11.0\"\n  },\n  \"scripts\": {\n    \"start\": \"react-scripts start\",\n    \"build\": \"react-scripts build\",\n    \"test\": \"react-scripts test\",\n    \"eject\": \"react-scripts eject\",\n    \"dev\": \"npm start\"\n  },\n  \"eslintConfig\": {\n    \"extends\": [\n      \"react-app\",\n      \"react-app/jest\"\n    ]\n  },\n  \"browserslist\": {\n    \"production\": [\n      \">0.2%\",\n      \"not dead\",\n      \"not op_mini all\"\n    ],\n    \"development\": [\n      \"last 1 chrome version\",\n      \"last 1 firefox version\",\n      \"last 1 safari version\"\n    ]\n  },\n  \"proxy\": \"http://localhost:{{backendPort}}\"\n}",
+                "encoding": "utf8"
+              }
+            },
+            {
+              "type": "file",
+              "name": "public/index.html",
+              "content": {
+                "content": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"icon\" href=\"%PUBLIC_URL%/favicon.ico\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <meta name=\"description\" content=\"{{projectName}} - Modern full-stack web application\" />\n    <title>{{projectName}}</title>\n  </head>\n  <body>\n    <noscript>You need to enable JavaScript to run this app.</noscript>\n    <div id=\"root\"></div>\n  </body>\n</html>",
+                "encoding": "utf8"
+              }
+            },
+            {
+              "type": "file",
+              "name": "src/index.js",
+              "content": {
+                "content": "import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport { QueryClient, QueryClientProvider } from 'react-query';\nimport { BrowserRouter } from 'react-router-dom';\nimport { ThemeProvider, createTheme } from '@mui/material/styles';\nimport CssBaseline from '@mui/material/CssBaseline';\nimport App from './App';\nimport reportWebVitals from './reportWebVitals';\n\nconst queryClient = new QueryClient();\nconst theme = createTheme({\n  palette: {\n    mode: 'light',\n    primary: {\n      main: '#1976d2',\n    },\n    secondary: {\n      main: '#dc004e',\n    },\n  },\n});\n\nconst root = ReactDOM.createRoot(document.getElementById('root'));\nroot.render(\n  <React.StrictMode>\n    <QueryClientProvider client={queryClient}>\n      <BrowserRouter>\n        <ThemeProvider theme={theme}>\n          <CssBaseline />\n          <App />\n        </ThemeProvider>\n      </BrowserRouter>\n    </QueryClientProvider>\n  </React.StrictMode>\n);\n\n// If you want to start measuring performance in your app, pass a function\n// to log results (for example: reportWebVitals(console.log))\n// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals\nreportWebVitals();",
+                "encoding": "utf8"
+              }
+            },
+            {
+              "type": "file",
+              "name": "src/App.js",
+              "content": {
+                "content": "import React from 'react';\nimport { Routes, Route } from 'react-router-dom';\nimport { Container, Typography, Box } from '@mui/material';\nimport Navbar from './components/Navbar';\nimport Home from './pages/Home';\nimport Dashboard from './pages/Dashboard';\nimport Profile from './pages/Profile';\n\nfunction App() {\n  return (\n    <Box sx={{ flexGrow: 1 }}>\n      <Navbar />\n      <Container maxWidth=\"lg\" sx={{ mt: 4, mb: 4 }}>\n        <Routes>\n          <Route path=\"/\" element={<Home />} />\n          <Route path=\"/dashboard\" element={<Dashboard />} />\n          <Route path=\"/profile\" element={<Profile />} />\n        </Routes>\n      </Container>\n    </Box>\n  );\n}\n\nexport default App;",
+                "encoding": "utf8"
+              }
+            }
+          ]
+        },
+        {
+          "type": "directory",
+          "name": "backend",
+          "description": "Node.js/Express backend API",
+          "children": [
+            {
+              "type": "file",
+              "name": "package.json",
+              "content": {
+                "content": "{\n  \"name\": \"{{projectName}}-backend\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Backend API for {{projectName}}\",\n  \"main\": \"server.js\",\n  \"scripts\": {\n    \"start\": \"node server.js\",\n    \"dev\": \"nodemon server.js\",\n    \"test\": \"jest\"\n  },\n  \"dependencies\": {\n    \"express\": \"^4.18.0\",\n    \"mongoose\": \"^7.0.0\",\n    \"cors\": \"^2.8.5\",\n    \"dotenv\": \"^16.0.0\",\n    \"bcryptjs\": \"^2.4.3\",\n    \"jsonwebtoken\": \"^9.0.0\",\n    \"express-validator\": \"^6.15.0\",\n    \"helmet\": \"^6.0.0\",\n    \"express-rate-limit\": \"^6.7.0\"\n  },\n  \"devDependencies\": {\n    \"nodemon\": \"^2.0.20\",\n    \"jest\": \"^29.0.0\",\n    \"supertest\": \"^6.3.0\"\n  },\n  \"keywords\": [\"api\", \"express\", \"mongodb\", \"jwt\"],\n  \"author\": \"{{author}}\",\n  \"license\": \"MIT\"\n}",
+                "encoding": "utf8"
+              }
+            },
+            {
+              "type": "file",
+              "name": "server.js",
+              "content": {
+                "content": "const express = require('express');\nconst mongoose = require('mongoose');\nconst cors = require('cors');\nconst helmet = require('helmet');\nconst rateLimit = require('express-rate-limit');\nrequire('dotenv').config();\n\nconst app = express();\nconst PORT = process.env.PORT || {{backendPort}};\n\n// Middleware\napp.use(helmet());\napp.use(cors());\napp.use(express.json());\n\n// Rate limiting\nconst limiter = rateLimit({\n  windowMs: 15 * 60 * 1000, // 15 minutes\n  max: 100 // limit each IP to 100 requests per windowMs\n});\napp.use(limiter);\n\n// Routes\napp.get('/', (req, res) => {\n  res.json({ message: 'Welcome to {{projectName}} API' });\n});\n\napp.get('/api/health', (req, res) => {\n  res.json({ status: 'OK', timestamp: new Date().toISOString() });\n});\n\n// Connect to MongoDB\nmongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/{{projectName}}', {\n  useNewUrlParser: true,\n  useUnifiedTopology: true,\n})\n.then(() => {\n  console.log('Connected to MongoDB');\n  app.listen(PORT, () => {\n    console.log(`Server running on port ${PORT}`);\n  });\n})\n.catch((error) => {\n  console.error('MongoDB connection error:', error);\n  process.exit(1);\n});",
+                "encoding": "utf8"
+              }
+            },
+            {
+              "type": "file",
+              "name": ".env.example",
+              "content": {
+                "content": "# Environment Configuration\n\n# Server\nPORT={{backendPort}}\nNODE_ENV=development\n\n# Database\nMONGODB_URI=mongodb://localhost:27017/{{projectName}}\n\n# JWT\nJWT_SECRET=your-super-secret-jwt-key-here\nJWT_EXPIRE=7d\n\n# CORS\nFRONTEND_URL=http://localhost:{{frontendPort}}\n\n# Other\nAPI_VERSION=v1",
+                "encoding": "utf8"
+              }
+            }
+          ]
+        },
+        {
+          "type": "directory",
+          "name": "docs",
+          "description": "Documentation and guides",
+          "children": [
+            {
+              "type": "file",
+              "name": "API.md",
+              "content": {
+                "content": "# {{projectName}} API Documentation\n\n## Base URL\n```\nhttp://localhost:{{backendPort}}/api\n```\n\n## Authentication\n\nThis API uses JWT (JSON Web Tokens) for authentication.\n\n### Headers\n```\nAuthorization: Bearer <jwt_token>\nContent-Type: application/json\n```\n\n## Endpoints\n\n### Health Check\n- **GET** `/api/health`\n- **Description**: Check if the API is running\n- **Response**: `{\"status\": \"OK\", \"timestamp\": \"2023-...\"}`\n\n### Users\n- **POST** `/api/auth/register` - Register new user\n- **POST** `/api/auth/login` - Login user\n- **GET** `/api/users/profile` - Get user profile\n- **PUT** `/api/users/profile` - Update user profile\n\n### Data\n- **GET** `/api/data` - Get all data\n- **POST** `/api/data` - Create new data\n- **GET** `/api/data/:id` - Get data by ID\n- **PUT** `/api/data/:id` - Update data\n- **DELETE** `/api/data/:id` - Delete data\n\n## Error Responses\n\n```json\n{\n  \"error\": \"Error message\",\n  \"code\": 400\n}\n```\n\n## Rate Limiting\n\n- 100 requests per 15 minutes per IP\n- Returns 429 status code when exceeded",
+                "encoding": "utf8"
+              }
+            },
+            {
+              "type": "file",
+              "name": "DEPLOYMENT.md",
+              "content": {
+                "content": "# Deployment Guide for {{projectName}}\n\n## Prerequisites\n\n- Node.js 18+\n- MongoDB Atlas account or local MongoDB\n- Docker (optional)\n- PM2 (optional)\n\n## Environment Setup\n\n1. Copy `.env.example` to `.env`\n2. Update the following variables:\n   - `MONGODB_URI`: Your MongoDB connection string\n   - `JWT_SECRET`: A secure random string\n   - `FRONTEND_URL`: Your deployed frontend URL\n\n## Local Development\n\n```bash\n# Install dependencies\nnpm run install:all\n\n# Start development servers\nnpm run dev\n```\n\nFrontend will be available at: http://localhost:{{frontendPort}}\nBackend will be available at: http://localhost:{{backendPort}}\n\n## Production Build\n\n```bash\n# Build frontend\nnpm run build --workspace=frontend\n\n# Build backend (if needed)\n# Backend runs directly from source in production\n```\n\n## Deployment Options\n\n### Option 1: Manual Deployment\n\n1. Upload files to your server\n2. Install dependencies: `npm install`\n3. Set environment variables\n4. Start the application: `npm start`\n\n### Option 2: Docker Deployment\n\n```dockerfile\nFROM node:18-alpine\n\nWORKDIR /app\n\nCOPY package*.json ./\nRUN npm ci --only=production\n\nCOPY . .\n\nEXPOSE {{backendPort}}\n\nCMD [\"npm\", \"start\"]\n```\n\n### Option 3: Cloud Platforms\n\n#### Heroku\n1. Create a new Heroku app\n2. Connect your GitHub repository\n3. Set environment variables in Heroku dashboard\n4. Enable automatic deploys\n\n#### Vercel (Frontend only)\n1. Connect your GitHub repository\n2. Set build command: `npm run build`\n3. Set output directory: `build`\n\n#### Railway/Render\n1. Connect your GitHub repository\n2. Set build command and start command\n3. Configure environment variables\n\n## Database Setup\n\n### MongoDB Atlas\n1. Create a cluster\n2. Create a database user\n3. Get connection string\n4. Update MONGODB_URI in environment variables\n\n### Local MongoDB\n```bash\n# Install MongoDB locally\nbrew install mongodb-community  # macOS\nsudo apt install mongodb        # Ubuntu\n\n# Start MongoDB\nbrew services start mongodb-community\n```\n\n## SSL/HTTPS Setup\n\nFor production, always use HTTPS. You can get free SSL certificates from:\n- Let's Encrypt\n- Cloudflare\n- Your hosting provider\n\n## Monitoring\n\nConsider setting up monitoring with:\n- PM2 for process management\n- MongoDB Atlas monitoring\n- Application logging\n\n## Security Checklist\n\n- [ ] JWT secret is secure and unique\n- [ ] Environment variables are not committed\n- [ ] HTTPS is enabled\n- [ ] CORS is properly configured\n- [ ] Rate limiting is active\n- [ ] Input validation is implemented\n- [ ] Dependencies are up to date\n\n## Troubleshooting\n\n### Common Issues\n\n1. **Port already in use**\n   - Change PORT in .env file\n   - Kill process using the port\n\n2. **MongoDB connection failed**\n   - Check MONGODB_URI format\n   - Ensure MongoDB is running\n   - Check network connectivity\n\n3. **Build fails**\n   - Clear node_modules and reinstall\n   - Check Node.js version\n   - Check for syntax errors",
+                "encoding": "utf8"
+              }
+            }
+          ]
+        },
+        {
+          "type": "directory",
+          "name": "scripts",
+          "description": "Build and deployment scripts",
+          "children": [
+            {
+              "type": "file",
+              "name": "build.sh",
+              "content": {
+                "content": "#!/bin/bash\n\n# Build script for {{projectName}}\n\nset -e\n\necho \"🚀 Building {{projectName}}...\"\n\n# Install dependencies\ndecho \"📦 Installing dependencies...\"\nnpm run install:all\n\n# Build frontend\necho \"🔨 Building frontend...\"\nnpm run build --workspace=frontend\n\n# Run tests\necho \"🧪 Running tests...\"\nnpm run test --workspaces\n\n# Create deployment package\necho \"📦 Creating deployment package...\"\nmkdir -p dist\ncp -r backend/* dist/\ncp -r frontend/build dist/public\n\n# Copy environment template\ncp backend/.env.example dist/.env.example\n\necho \"✅ Build completed successfully!\"\necho \"📁 Deployment files are in ./dist/\"",
+                "encoding": "utf8",
+                "executable": true
+              }
+            },
+            {
+              "type": "file",
+              "name": "deploy.sh",
+              "content": {
+                "content": "#!/bin/bash\n\n# Deployment script for {{projectName}}\n\nset -e\n\n# Configuration\nAPP_NAME=\"{{projectName}}\"\nREMOTE_HOST=\"$1\"\nREMOTE_USER=\"$2\"\n\nif [ -z \"$REMOTE_HOST\" ] || [ -z \"$REMOTE_USER\" ]; then\n  echo \"Usage: $0 <remote_host> <remote_user>\"\n  echo \"Example: $0 my-server.com ubuntu\"\n  exit 1\nfi\n\necho \"🚀 Deploying {{projectName}} to $REMOTE_HOST...\"\n\n# Build application\necho \"🔨 Building application...\"\n./scripts/build.sh\n\n# Create deployment archive\necho \"📦 Creating deployment archive...\"\ntar -czf deploy.tar.gz -C dist .\n\n# Upload to server\necho \"📤 Uploading to server...\"\nscp deploy.tar.gz \"$REMOTE_USER@$REMOTE_HOST:~/$APP_NAME-deploy.tar.gz\"\n\n# Deploy on server\necho \"🔧 Deploying on server...\"\nssh \"$REMOTE_USER@$REMOTE_HOST\" << EOF\n  # Create app directory\n  mkdir -p ~/$APP_NAME\n  cd ~/$APP_NAME\n\n  # Extract deployment\n  tar -xzf ../$APP_NAME-deploy.tar.gz\n\n  # Install dependencies\n  npm install --production\n\n  # Set up environment\n  if [ ! -f .env ]; then\n    cp .env.example .env\n    echo \"⚠️  Please configure .env file on server\"\n  fi\n\n  # Restart application (assuming PM2)\n  pm2 restart $APP_NAME || pm2 start server.js --name $APP_NAME\n\n  echo \"✅ Deployment completed!\"\nEOF\n\n# Cleanup local files\necho \"🧹 Cleaning up...\"\nrm -f deploy.tar.gz\n\n# Remove remote archive\necho \"🧹 Cleaning up remote files...\"\nssh \"$REMOTE_USER@$REMOTE_HOST\" \"rm -f $APP_NAME-deploy.tar.gz\"\n\necho \"🎉 Deployment completed successfully!\"\necho \"🌐 Your app should be running at: http://$REMOTE_HOST\"\n\necho \"📝 Next steps:\"\necho \"  1. Configure .env file on server\"\necho \"  2. Set up reverse proxy (nginx)\"\necho \"  3. Configure SSL certificate\"\necho \"  4. Set up monitoring\"",
+                "encoding": "utf8",
+                "executable": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "file",
+          "name": "docker-compose.yml",
+          "description": "Docker Compose configuration for development",
+          "content": {
+            "content": "version: '3.8'\n\nservices:\n  app:\n    build:\n      context: .\n      dockerfile: Dockerfile\n    ports:\n      - \"{{backendPort}}:{{backendPort}}\"\n    environment:\n      - NODE_ENV=development\n      - MONGODB_URI=mongodb://mongodb:27017/{{projectName}}\n    depends_on:\n      - mongodb\n    volumes:\n      - ./backend:/app\n      - /app/node_modules\n    networks:\n      - {{projectName}}-network\n\n  frontend:\n    build:\n      context: ./frontend\n      dockerfile: Dockerfile\n    ports:\n      - \"{{frontendPort}}:3000\"\n    depends_on:\n      - app\n    networks:\n      - {{projectName}}-network\n\n  mongodb:\n    image: mongo:7-jammy\n    ports:\n      - \"27017:27017\"\n    environment:\n      - MONGO_INITDB_DATABASE={{projectName}}\n    volumes:\n      - mongodb_data:/data/db\n    networks:\n      - {{projectName}}-network\n\nvolumes:\n  mongodb_data:\n\nnetworks:\n  {{projectName}}-network:\n    driver: bridge",
+            "encoding": "utf8"
+          }
+        },
+        {
+          "type": "file",
+          "name": "Dockerfile",
+          "description": "Docker configuration for backend",
+          "content": {
+            "content": "FROM node:18-alpine\n\n# Set working directory\nWORKDIR /app\n\n# Copy package files\nCOPY backend/package*.json ./\n\n# Install dependencies\nRUN npm ci --only=production && npm cache clean --force\n\n# Create non-root user\nRUN addgroup -g 1001 -S nodejs\nRUN adduser -S nextjs -u 1001\n\n# Copy application code\nCOPY backend/ ./\n\n# Change ownership\nRUN chown -R nextjs:nodejs /app\n\n# Switch to non-root user\nUSER nextjs\n\n# Expose port\nEXPOSE {{backendPort}}\n\n# Health check\nHEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \\\n  CMD node -e \"require('http').get('http://localhost:{{backendPort}}/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })\"\n\n# Start application\nCMD [\"npm\", \"start\"]",
+            "encoding": "utf8"
+          }
+        }
+      ]
+    }
+  ],
+  "ignorePatterns": [
+    "node_modules/**",
+    ".git/**",
+    "dist/**",
+    "build/**",
+    ".env*",
+    "*.log",
+    ".DS_Store",
+    "Thumbs.db"
+  ],
+  "metadata": {
+    "created": "2024-01-15",
+    "author": "{{author}}",
+    "tags": ["fullstack", "mern", "react", "express", "mongodb", "modern"],
+    "complexity": "advanced",
+    "estimatedTime": "2-3 hours setup"
+  }
+}

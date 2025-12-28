@@ -105,6 +105,10 @@ export interface FileManagerState {
   searchResults?: SearchResult;
   isLoading: boolean;
   error?: string;
+  // Structure-related state
+  structurePanelOpen: boolean;
+  structureEditorPath: string | null;
+  structureHistory: import("~/types/filesystem-engine").FileStructureDefinition[];
 }
 
 export interface CloudProvider {

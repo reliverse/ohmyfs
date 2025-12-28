@@ -11,6 +11,7 @@ import type {
   SymlinkDefinition,
   VariableValues,
 } from "~/types/filesystem-engine";
+import { logger } from "~/utils/logger";
 
 /**
  * Evaluates a filesystem definition by resolving variables and building the desired structure
@@ -57,11 +58,24 @@ function validateAndResolveVariables(
 
     if (provided !== undefined) {
       // Validate provided value
-      if (varDef.validation) {
-        const result = varDef.validation.safeParse(provided);
+      if (
+        varDef.validation &&
+        typeof varDef.validation === "object" &&
+        varDef.validation &&
+        "safeParse" in varDef.validation
+      ) {
+        const result = (
+          varDef.validation as {
+            safeParse: (value: unknown) => {
+              success: boolean;
+              data?: unknown;
+              error?: { message: string };
+            };
+          }
+        ).safeParse(provided);
         if (!result.success) {
           throw new Error(
-            `Invalid value for variable "${varDef.name}": ${result.error.message}`
+            `Invalid value for variable "${varDef.name}": ${result.error?.message || "Validation failed"}`
           );
         }
         resolved[varDef.name] = result.data;
@@ -91,26 +105,26 @@ async function resolveStructure(
   const resolved: ResolvedFileSystemNode[] = [];
 
   for (const item of structure) {
-    const resolvedItem = await resolveNode(item, basePath, variables);
-    if (resolvedItem) {
-      resolved.push(resolvedItem);
-    }
+    const resolvedItems = await resolveNodeRecursive(item, basePath, variables);
+    resolved.push(...resolvedItems);
   }
 
   return resolved;
 }
 
 /**
- * Resolve a single filesystem node
+ * Recursively resolve a node and all its children
  */
-async function resolveNode(
+async function resolveNodeRecursive(
   node: FileSystemDefinition,
   currentPath: string,
   variables: VariableValues
-): Promise<ResolvedFileSystemNode | null> {
+): Promise<ResolvedFileSystemNode[]> {
+  const resolvedNodes: ResolvedFileSystemNode[] = [];
+
   // Check condition first
   if (node.condition && !(await evaluateCondition(node.condition, variables))) {
-    return null;
+    return resolvedNodes;
   }
 
   const resolvedName = interpolateString(node.name, variables);
@@ -129,18 +143,35 @@ async function resolveNode(
     },
   };
 
-  // Handle children for directories
-  if (node.type === "directory" && (node as DirectoryDefinition).children) {
-    // This would be resolved recursively in a real implementation
-    // For now, we'll just mark that it should exist
+  // Resolve content for files
+  if (node.type === "file") {
+    const fileNode = node as FileDefinition;
+    if (fileNode.content) {
+      resolvedNode.resolvedContent = interpolateString(
+        fileNode.content.content,
+        variables
+      );
+    }
   }
 
-  // Handle symlinks
-  if (node.type === "symlink") {
-    // This would resolve the target path
+  resolvedNodes.push(resolvedNode);
+
+  // Handle children for directories - recursively resolve them
+  if (node.type === "directory") {
+    const dirNode = node as DirectoryDefinition;
+    if (dirNode.children) {
+      for (const child of dirNode.children) {
+        const childNodes = await resolveNodeRecursive(
+          child,
+          fullPath,
+          variables
+        );
+        resolvedNodes.push(...childNodes);
+      }
+    }
   }
 
-  return resolvedNode;
+  return resolvedNodes;
 }
 
 async function evaluatePathCondition(
@@ -252,7 +283,8 @@ function getNodeReason(node: FileSystemDefinition): string {
  */
 export function compareWithFilesystem(
   resolved: ResolvedDefinition,
-  actualEntries: FileEntry[]
+  actualEntries: FileEntry[],
+  force = false
 ) {
   const missing: ResolvedFileSystemNode[] = [];
   const extra: FileEntry[] = [];
@@ -277,11 +309,23 @@ export function compareWithFilesystem(
   // Find missing and matching items
   for (const desired of resolved.resolvedStructure) {
     const actual = actualMap.get(desired.path);
+
     if (actual) {
       // Check if they match
       if (entriesMatch(desired, actual)) {
-        matching.push(desired);
+        // In force mode, treat all existing items as conflicts to ensure bootstrap
+        if (force) {
+          conflicts.push({
+            desired,
+            actual,
+            reason: "Force bootstrap mode - recreating existing structure",
+          });
+        } else {
+          logger.debug("non-force mode - marking as matching", desired.name);
+          matching.push(desired);
+        }
       } else {
+        logger.debug("type mismatch - treating as conflict", desired.name);
         conflicts.push({
           desired,
           actual,

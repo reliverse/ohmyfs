@@ -13,6 +13,7 @@ import {
   useFileManagerActions,
   useFileManagerState,
 } from "../contexts/file-manager-context";
+import { useTheme } from "./theme-provider";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Label } from "./ui/label";
@@ -37,7 +38,6 @@ interface FileManagerSettings {
   groupBy: "type" | "date" | "size" | "none";
   autoRefresh: boolean;
   refreshInterval: number;
-  theme: "light" | "dark" | "system";
   language: string;
 }
 
@@ -95,6 +95,7 @@ function ToggleSetting({
 export default function SettingsPanel() {
   const { setViewMode } = useFileManagerActions();
   const { viewMode: currentViewMode } = useFileManagerState();
+  const { theme, setTheme } = useTheme();
 
   const [settings, setSettings] = useState<FileManagerSettings>({
     showHiddenFiles: currentViewMode.showHidden,
@@ -107,7 +108,6 @@ export default function SettingsPanel() {
     groupBy: currentViewMode.groupBy || "none",
     autoRefresh: false,
     refreshInterval: 30,
-    theme: "system",
     language: "en",
   });
 
@@ -360,8 +360,10 @@ export default function SettingsPanel() {
           <div className="space-y-2">
             <Label>Theme</Label>
             <Select
-              onValueChange={(value) => updateSetting("theme", value)}
-              value={settings.theme}
+              onValueChange={(value) =>
+                setTheme(value as "light" | "dark" | "system")
+              }
+              value={theme}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -467,20 +469,6 @@ export default function SettingsPanel() {
           </Button>
         </div>
       </SettingSection>
-
-      {/* Save Button */}
-      <div className="flex gap-2 pt-4">
-        <Button
-          className="flex-1 px-6 py-4 font-semibold"
-          size="lg"
-          type="button"
-        >
-          Save Settings
-        </Button>
-        <Button className="px-6 py-4" size="lg" type="button" variant="outline">
-          Reset to Defaults
-        </Button>
-      </div>
     </div>
   );
 }

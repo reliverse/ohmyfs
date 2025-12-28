@@ -30,10 +30,6 @@ interface ErrorInfo {
   }>;
 }
 
-/**
- * Enhanced error boundary component for catching and displaying React errors gracefully.
- * Provides categorized error handling with recovery options and error reporting.
- */
 export class ErrorBoundary extends Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
@@ -63,20 +59,16 @@ export class ErrorBoundary extends Component<
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     const errorId = this.state.errorId || `err_${Date.now()}`;
 
-    // Log error to console in development
     if (import.meta.env.DEV) {
       console.error("ErrorBoundary caught an error:", error, errorInfo);
     }
 
-    // Report error to external service in production
     if (!import.meta.env.DEV) {
       this.reportError(error, errorInfo, errorId);
     }
 
-    // Call custom error handler if provided
     this.props.onError?.(error, errorInfo);
 
-    // Show toast notification
     toast.error("An unexpected error occurred", {
       description: "Check the error details below for more information",
       duration: 5000,
@@ -88,7 +80,6 @@ export class ErrorBoundary extends Component<
     errorInfo: React.ErrorInfo,
     errorId: string
   ) => {
-    // In a real app, this would send to an error reporting service like Sentry
     const errorReport = {
       id: errorId,
       message: error.message,
@@ -99,19 +90,17 @@ export class ErrorBoundary extends Component<
       url: window.location.href,
     };
 
-    // Store in localStorage for debugging (in production, send to server)
     try {
       const existingReports = JSON.parse(
         localStorage.getItem("error_reports") || "[]"
       );
       existingReports.push(errorReport);
-      // Keep only last 10 reports
       if (existingReports.length > 10) {
         existingReports.shift();
       }
       localStorage.setItem("error_reports", JSON.stringify(existingReports));
     } catch {
-      // Ignore localStorage errors
+      // ignore
     }
   };
 
@@ -119,7 +108,6 @@ export class ErrorBoundary extends Component<
     const message = error.message.toLowerCase();
     const stack = error.stack?.toLowerCase() || "";
 
-    // Network errors
     if (
       message.includes("network") ||
       message.includes("fetch") ||
@@ -226,7 +214,7 @@ export class ErrorBoundary extends Component<
         {
           label: "Report Issue",
           action: () => {
-            const subject = encodeURIComponent("Launcher Error Report");
+            const subject = encodeURIComponent("OhMyFS Error Report");
             const body = encodeURIComponent(
               `Error ID: ${this.state.errorId}\nError: ${error.message}\nPlease describe what you were doing when this error occurred.`
             );

@@ -1,4 +1,5 @@
-import { dirname, homeDir } from "@tauri-apps/api/path";
+import { useNavigate } from "@tanstack/react-router";
+import { homeDir } from "@tauri-apps/api/path";
 import {
   ArrowLeft,
   ArrowRight,
@@ -8,15 +9,14 @@ import {
   MoreHorizontal,
   Search,
   Settings,
+  Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { DirectoryTree } from "~/components/directory-tree";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileList } from "~/components/file-list";
 import { FileOperations } from "~/components/file-operations";
 import { FilePreview } from "~/components/file-preview";
 import { PerformanceIndicator } from "~/components/performance-indicator";
 import { ProgressIndicator } from "~/components/progress-indicator";
-import { QuickAccess } from "~/components/quick-access";
 import { SearchPanel } from "~/components/search-panel";
 import {
   Breadcrumb,
@@ -35,116 +35,124 @@ import {
 } from "~/contexts/file-manager-context";
 import { useCurrentDirectory, useDirectory } from "~/hooks/use-file-system";
 import type { FileEntry, FileOperation } from "~/types/file";
+import { QuickStructurePanel } from "./quick-structure-panel";
 
-export function FileBrowser() {
-  const {
-    currentPath,
-    navigateTo,
-    goBack,
-    goForward,
-    canGoBack,
-    canGoForward,
-  } = useCurrentDirectory();
-  const { setViewMode, clearSelection, setSelectedItems, setClipboard } =
-    useFileManagerActions();
-  const {
-    viewMode: currentViewMode,
-    selectedItems,
-    operations,
-    clipboard,
-  } = useFileManagerState();
-  const [showSearch, setShowSearch] = useState(false);
-  const [showOperations, setShowOperations] = useState(false);
-  const [previewFile, setPreviewFile] = useState<FileEntry | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
+// Custom hook for file operations to reduce complexity
+function useFileOperations(
+  directoryData: { files?: FileEntry[] } | undefined,
+  selectedItems: string[],
+  setSelectedItems: (items: string[]) => void,
+  setClipboard: (files: FileEntry[], operation: "copy" | "cut") => void,
+  clipboard: { items: FileEntry[] }
+) {
+  return useMemo(
+    () => ({
+      handleSelectAll: () => {
+        if (directoryData?.files) {
+          setSelectedItems(directoryData.files.map((f) => f.path));
+        }
+      },
+      handleCopy: () => {
+        if (selectedItems.length > 0 && directoryData?.files) {
+          const selectedFiles = directoryData.files.filter((file) =>
+            selectedItems.includes(file.path)
+          );
+          setClipboard(selectedFiles, "copy");
+        }
+      },
+      handleCut: () => {
+        if (selectedItems.length > 0 && directoryData?.files) {
+          const selectedFiles = directoryData.files.filter((file) =>
+            selectedItems.includes(file.path)
+          );
+          setClipboard(selectedFiles, "cut");
+        }
+      },
+      handlePaste: () => {
+        if (clipboard.items.length > 0) {
+          // TODO: Implement paste
+        }
+      },
+    }),
+    [
+      directoryData?.files,
+      setSelectedItems,
+      selectedItems,
+      setClipboard,
+      clipboard.items.length,
+    ]
+  );
+}
 
-  useEffect(() => {
-    if (!currentPath) {
-      navigateTo("/tmp");
-    }
-  }, [currentPath, navigateTo]);
+// Extract breadcrumb component to reduce complexity
+function BreadcrumbNavigation({
+  currentPath,
+  onPathChange,
+}: {
+  currentPath: string;
+  onPathChange: (path: string) => void;
+}) {
+  if (!currentPath) {
+    return null;
+  }
 
-  const {
-    data: directoryData,
-    isLoading,
-    error,
-  } = useDirectory(currentPath, {
-    enabled: !!currentPath,
-    showHidden: currentViewMode.showHidden,
+  const parts = currentPath.split("/").filter(Boolean);
+  const breadcrumbs: Array<{ name: string; path: string; isLast: boolean }> =
+    [];
+
+  breadcrumbs.push({
+    name: "Root",
+    path: "/",
+    isLast: parts.length === 0,
   });
 
-  const handlePathChange = useCallback(
-    (newPath: string) => {
-      if (newPath !== currentPath) {
-        navigateTo(newPath);
-        clearSelection();
-      }
-    },
-    [navigateTo, currentPath, clearSelection]
-  );
+  parts.forEach((part: string, index: number) => {
+    const path = `/${parts.slice(0, index + 1).join("/")}`;
+    breadcrumbs.push({
+      name: part,
+      path,
+      isLast: index === parts.length - 1,
+    });
+  });
 
-  const handlePreviewFile = (file: FileEntry) => {
+  return (
+    <Breadcrumb>
+      <BreadcrumbList>
+        {breadcrumbs.map((crumb, index) => (
+          <div className="flex items-center" key={crumb.path}>
+            {index > 0 && <BreadcrumbSeparator />}
+            <BreadcrumbItem>
+              {crumb.isLast ? (
+                <BreadcrumbPage>{crumb.name}</BreadcrumbPage>
+              ) : (
+                <BreadcrumbLink
+                  className="cursor-pointer hover:text-primary"
+                  onClick={() => onPathChange(crumb.path)}
+                >
+                  {crumb.name}
+                </BreadcrumbLink>
+              )}
+            </BreadcrumbItem>
+          </div>
+        ))}
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
+
+// Custom hook for UI state management to reduce complexity
+function useFileBrowserUI() {
+  const [showSearch, setShowSearch] = useState(false);
+  const [showOperations, setShowOperations] = useState(false);
+  const [showStructurePanel, setShowStructurePanel] = useState(false);
+  const [previewFile, setPreviewFile] = useState<FileEntry | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  const handlePreviewFile = useCallback((file: FileEntry) => {
     setPreviewFile(file);
     setShowPreview(true);
-  };
-
-  const handleSelectAll = useCallback(() => {
-    if (directoryData?.files) {
-      setSelectedItems(directoryData.files.map((f) => f.path));
-    }
-  }, [directoryData?.files, setSelectedItems]);
-
-  const handleCopy = useCallback(() => {
-    if (selectedItems.length > 0 && directoryData?.files) {
-      const selectedFiles = directoryData.files.filter((file) =>
-        selectedItems.includes(file.path)
-      );
-      setClipboard(selectedFiles, "copy");
-    }
-  }, [selectedItems, directoryData?.files, setClipboard]);
-
-  const handleCut = useCallback(() => {
-    if (selectedItems.length > 0 && directoryData?.files) {
-      const selectedFiles = directoryData.files.filter((file) =>
-        selectedItems.includes(file.path)
-      );
-      setClipboard(selectedFiles, "cut");
-    }
-  }, [selectedItems, directoryData?.files, setClipboard]);
-
-  const handlePaste = useCallback(() => {
-    if (clipboard.items.length > 0) {
-      // TODO: Implement paste
-    }
-  }, [clipboard.items.length]);
-
-  const handleCtrlKeyShortcuts = useCallback(
-    (e: KeyboardEvent) => {
-      switch (e.key) {
-        case "a":
-          e.preventDefault();
-          handleSelectAll();
-          break;
-        case "c":
-          e.preventDefault();
-          handleCopy();
-          break;
-        case "x":
-          e.preventDefault();
-          handleCut();
-          break;
-        case "v":
-          e.preventDefault();
-          handlePaste();
-          break;
-        default:
-          break;
-      }
-    },
-    [handleSelectAll, handleCopy, handleCut, handlePaste]
-  );
-
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  }, []);
 
   const handleDeleteConfirm = useCallback(() => {
     setShowDeleteDialog(true);
@@ -152,10 +160,34 @@ export function FileBrowser() {
 
   const handleDeleteExecute = useCallback(() => {
     // TODO: Implement delete
-    console.log("Deleting items:", selectedItems);
+    console.log("Deleting items:", previewFile);
     setShowDeleteDialog(false);
-  }, [selectedItems]);
+  }, [previewFile]);
 
+  return {
+    showSearch,
+    setShowSearch,
+    showOperations,
+    setShowOperations,
+    showStructurePanel,
+    setShowStructurePanel,
+    previewFile,
+    showPreview,
+    setShowPreview,
+    showDeleteDialog,
+    setShowDeleteDialog,
+    handlePreviewFile,
+    handleDeleteConfirm,
+    handleDeleteExecute,
+  };
+}
+
+// Custom hook for file action handlers to reduce complexity
+function useFileActions(
+  selectedItems: string[],
+  directoryData: { files?: FileEntry[] } | undefined,
+  handlePathChange: (path: string) => void
+) {
   const handleRename = useCallback(() => {
     if (selectedItems.length === 1) {
       // TODO: Implement rename
@@ -177,51 +209,91 @@ export function FileBrowser() {
     }
   }, [selectedItems, directoryData?.files, handlePathChange]);
 
-  const handleBackspace = useCallback(async () => {
-    if (currentPath !== "/") {
-      const parentPath = await dirname(currentPath);
-      handlePathChange(parentPath);
-    }
-  }, [currentPath, handlePathChange]);
+  const handleBackspace = useCallback(
+    async (currentPath: string) => {
+      if (currentPath !== "/") {
+        const { dirname } = await import("@tauri-apps/api/path");
+        const parentPath = await dirname(currentPath);
+        handlePathChange(parentPath);
+      }
+    },
+    [handlePathChange]
+  );
 
-  const handleRegularKeyShortcuts = useCallback(
-    (e: KeyboardEvent) => {
+  return {
+    handleRename,
+    handleEnter,
+    handleBackspace,
+  };
+}
+
+// Custom hook for keyboard shortcuts to reduce complexity
+function useKeyboardShortcuts(
+  handlers: {
+    handleSelectAll: () => void;
+    handleCopy: () => void;
+    handleCut: () => void;
+    handlePaste: () => void;
+    handleDeleteConfirm: () => void;
+    handleRename: () => void;
+    handleEnter: () => void;
+    handleBackspace: (currentPath: string) => void;
+    clearSelection: () => void;
+  },
+  currentPath: string
+) {
+  return useMemo(() => {
+    const handleCtrlKeyShortcuts = (e: KeyboardEvent) => {
       switch (e.key) {
-        case "Delete":
+        case "a":
           e.preventDefault();
-          handleDeleteConfirm();
+          handlers.handleSelectAll();
           break;
-        case "F2":
+        case "c":
           e.preventDefault();
-          handleRename();
+          handlers.handleCopy();
           break;
-        case "Enter":
+        case "x":
           e.preventDefault();
-          handleEnter();
+          handlers.handleCut();
           break;
-        case "Backspace":
+        case "v":
           e.preventDefault();
-          handleBackspace(); // Async call, no await needed for UI
-          break;
-        case "Escape":
-          e.preventDefault();
-          clearSelection();
+          handlers.handlePaste();
           break;
         default:
           break;
       }
-    },
-    [
-      handleDeleteConfirm,
-      handleRename,
-      handleEnter,
-      handleBackspace,
-      clearSelection,
-    ]
-  );
+    };
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
+    const handleRegularKeyShortcuts = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case "Delete":
+          e.preventDefault();
+          handlers.handleDeleteConfirm();
+          break;
+        case "F2":
+          e.preventDefault();
+          handlers.handleRename();
+          break;
+        case "Enter":
+          e.preventDefault();
+          handlers.handleEnter();
+          break;
+        case "Backspace":
+          e.preventDefault();
+          handlers.handleBackspace(currentPath);
+          break;
+        case "Escape":
+          e.preventDefault();
+          handlers.clearSelection();
+          break;
+        default:
+          break;
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -236,8 +308,113 @@ export function FileBrowser() {
       } else {
         handleRegularKeyShortcuts(e);
       }
+    };
+
+    return handleKeyDown;
+  }, [
+    handlers.handleSelectAll,
+    handlers.handleCopy,
+    handlers.handleCut,
+    handlers.handlePaste,
+    handlers.handleDeleteConfirm,
+    handlers.handleRename,
+    handlers.handleEnter,
+    handlers.handleBackspace,
+    handlers.clearSelection,
+    currentPath,
+  ]);
+}
+
+export function FileBrowser() {
+  const navigate = useNavigate();
+  const {
+    currentPath,
+    navigateTo,
+    goBack,
+    goForward,
+    canGoBack,
+    canGoForward,
+  } = useCurrentDirectory();
+  const { setViewMode, clearSelection, setSelectedItems, setClipboard } =
+    useFileManagerActions();
+  const {
+    viewMode: currentViewMode,
+    selectedItems,
+    operations,
+    clipboard,
+  } = useFileManagerState();
+
+  const {
+    showSearch,
+    setShowSearch,
+    showOperations,
+    setShowOperations,
+    showStructurePanel,
+    setShowStructurePanel,
+    previewFile,
+    showPreview,
+    setShowPreview,
+    showDeleteDialog,
+    setShowDeleteDialog,
+    handlePreviewFile,
+    handleDeleteConfirm,
+    handleDeleteExecute,
+  } = useFileBrowserUI();
+
+  useEffect(() => {
+    if (!currentPath) {
+      navigateTo("/tmp");
+    }
+  }, [currentPath, navigateTo]);
+
+  const {
+    data: directoryData,
+    isLoading,
+    error,
+    refetch: refetchDirectory,
+  } = useDirectory(currentPath, {
+    enabled: !!currentPath,
+    showHidden: currentViewMode.showHidden,
+  });
+
+  const handlePathChange = useCallback(
+    (newPath: string) => {
+      if (newPath !== currentPath) {
+        navigateTo(newPath);
+        clearSelection();
+      }
     },
-    [handleCtrlKeyShortcuts, handleRegularKeyShortcuts]
+    [navigateTo, currentPath, clearSelection]
+  );
+
+  const { handleSelectAll, handleCopy, handleCut, handlePaste } =
+    useFileOperations(
+      directoryData,
+      selectedItems,
+      setSelectedItems,
+      setClipboard,
+      clipboard
+    );
+
+  const { handleRename, handleEnter, handleBackspace } = useFileActions(
+    selectedItems,
+    directoryData,
+    handlePathChange
+  );
+
+  const handleKeyDown = useKeyboardShortcuts(
+    {
+      handleSelectAll,
+      handleCopy,
+      handleCut,
+      handlePaste,
+      handleDeleteConfirm,
+      handleRename,
+      handleEnter,
+      handleBackspace,
+      clearSelection,
+    },
+    currentPath
   );
 
   useEffect(() => {
@@ -254,82 +431,8 @@ export function FileBrowser() {
     setViewMode({ type: newType });
   };
 
-  const renderBreadcrumbs = () => {
-    if (!currentPath) {
-      return null;
-    }
-
-    const parts = currentPath.split("/").filter(Boolean);
-    const breadcrumbs: Array<{ name: string; path: string; isLast: boolean }> =
-      [];
-
-    breadcrumbs.push({
-      name: "Root",
-      path: "/",
-      isLast: parts.length === 0,
-    });
-
-    parts.forEach((part: string, index: number) => {
-      const path = `/${parts.slice(0, index + 1).join("/")}`;
-      breadcrumbs.push({
-        name: part,
-        path,
-        isLast: index === parts.length - 1,
-      });
-    });
-
-    return (
-      <Breadcrumb>
-        <BreadcrumbList>
-          {breadcrumbs.map((crumb, index) => (
-            <div className="flex items-center" key={crumb.path}>
-              {index > 0 && <BreadcrumbSeparator />}
-              <BreadcrumbItem>
-                {crumb.isLast ? (
-                  <BreadcrumbPage>{crumb.name}</BreadcrumbPage>
-                ) : (
-                  <BreadcrumbLink
-                    className="cursor-pointer hover:text-primary"
-                    onClick={() => handleBreadcrumbClick(crumb.path)}
-                  >
-                    {crumb.name}
-                  </BreadcrumbLink>
-                )}
-              </BreadcrumbItem>
-            </div>
-          ))}
-        </BreadcrumbList>
-      </Breadcrumb>
-    );
-  };
-
   return (
     <div className="flex h-full bg-background">
-      <div className="flex w-64 flex-col border-border border-r bg-muted/30">
-        <div className="p-4">
-          <h3 className="mb-2 font-semibold text-muted-foreground text-sm">
-            Quick Access
-          </h3>
-          <QuickAccess onNavigate={handlePathChange} />
-        </div>
-
-        <Separator />
-
-        <div className="flex-1 overflow-hidden">
-          <div className="p-4 pb-2">
-            <h3 className="font-semibold text-muted-foreground text-sm">
-              Folders
-            </h3>
-          </div>
-          <div className="px-2">
-            <DirectoryTree
-              currentPath={currentPath}
-              onNavigate={handlePathChange}
-            />
-          </div>
-        </div>
-      </div>
-
       <div className="flex flex-1 flex-col">
         <div className="border-border border-b bg-background/95 p-4 backdrop-blur-sm">
           <div className="mb-4 flex items-center gap-2">
@@ -390,6 +493,16 @@ export function FileBrowser() {
             <Separator className="h-6" orientation="vertical" />
 
             <Button
+              aria-label="Quick structure panel"
+              className={showStructurePanel ? "bg-accent" : ""}
+              onClick={() => setShowStructurePanel(!showStructurePanel)}
+              size="sm"
+              variant="ghost"
+            >
+              <Zap className="h-4 w-4" />
+            </Button>
+
+            <Button
               aria-label="Toggle file operations"
               className={showOperations ? "bg-accent" : ""}
               onClick={() => setShowOperations(!showOperations)}
@@ -405,7 +518,12 @@ export function FileBrowser() {
           </div>
 
           <div className="flex items-center justify-between">
-            <div className="min-w-0 flex-1">{renderBreadcrumbs()}</div>
+            <div className="min-w-0 flex-1">
+              <BreadcrumbNavigation
+                currentPath={currentPath}
+                onPathChange={handleBreadcrumbClick}
+              />
+            </div>
 
             <div className="ml-4 text-muted-foreground text-sm">
               {selectedItems.length > 0 && (
@@ -452,6 +570,11 @@ export function FileBrowser() {
               files={directoryData.files}
               groupedFiles={directoryData.grouped}
               onNavigate={handlePathChange}
+              onOpenQuickPanel={() => setShowStructurePanel(true)}
+              onOpenStructureEditor={(path) => {
+                // Navigate to filesystem engine with the selected path
+                navigate({ to: "/filesystem-engine", search: { path } });
+              }}
               onPreview={handlePreviewFile}
               viewMode={currentViewMode}
             />
@@ -495,6 +618,23 @@ export function FileBrowser() {
         open={showDeleteDialog}
         title="Delete Items"
         variant="destructive"
+      />
+
+      <QuickStructurePanel
+        currentPath={currentPath}
+        isOpen={showStructurePanel}
+        onClose={() => setShowStructurePanel(false)}
+        onDefinitionImported={(definition) => {
+          // Navigate to filesystem engine with imported definition
+          navigate({
+            to: "/filesystem-engine",
+            search: { definition: JSON.stringify(definition) },
+          });
+        }}
+        onStructureApplied={() => {
+          // Refresh the current directory after structure application
+          refetchDirectory();
+        }}
       />
     </div>
   );

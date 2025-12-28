@@ -39,7 +39,6 @@ function useUpload(): [
 ] {
   const [loading, setLoading] = useState<boolean>(false);
   const upload = useCallback(
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: <>
     async (input: UploadInput): Promise<UploadResult> => {
       try {
         setLoading(true);

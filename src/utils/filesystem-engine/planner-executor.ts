@@ -1,4 +1,3 @@
-import { mkdir, remove, writeFile } from "@tauri-apps/plugin-fs";
 import type {
   EngineConfig,
   ExecutionPlan,
@@ -6,6 +5,12 @@ import type {
   FileSystemChange,
   FileSystemDiff,
 } from "~/types/filesystem-engine";
+import {
+  createDirectory as createDirectoryUtil,
+  deleteFile as deleteFileUtil,
+  writeFileContent as writeFileContentUtil,
+} from "~/utils/file-system";
+import { logger } from "~/utils/logger";
 
 /**
  * Plans and executes filesystem changes
@@ -57,6 +62,8 @@ async function executeSingleChange(
   result.status = "running";
   result.startTime = new Date();
 
+  logger.debug(`Executing change: ${change.type} - ${change.path}`);
+
   try {
     if (onProgress) {
       onProgress(result);
@@ -67,8 +74,10 @@ async function executeSingleChange(
     result.status = "completed";
     result.endTime = new Date();
     result.duration = result.endTime.getTime() - result.startTime.getTime();
+    logger.debug(`Change completed: ${change.type} - ${change.path}`);
     return true;
   } catch (error) {
+    logger.error(`Change failed: ${change.type} - ${change.path}`, error);
     result.status = "failed";
     result.error = error instanceof Error ? error.message : String(error);
     result.endTime = new Date();
@@ -151,13 +160,13 @@ async function executeChange(
 ): Promise<void> {
   if (config.dryRun) {
     if (config.verbose) {
-      console.log(`[DRY RUN] Would execute: ${change.description}`);
+      logger.debug(`[DRY RUN] Would execute: ${change.description}`);
     }
     return;
   }
 
   if (config.verbose) {
-    console.log(`Executing: ${change.description}`);
+    logger.debug(`Executing: ${change.description}`);
   }
 
   switch (change.type) {
@@ -209,7 +218,7 @@ async function executeChange(
  */
 async function createDirectory(path: string): Promise<void> {
   try {
-    await mkdir(path, { recursive: true });
+    await createDirectoryUtil(path);
   } catch (error) {
     throw new Error(`Failed to create directory ${path}: ${error}`);
   }
@@ -220,10 +229,21 @@ async function createDirectory(path: string): Promise<void> {
  */
 async function createFile(change: FileSystemChange): Promise<void> {
   try {
-    // For now, create empty file. In a real implementation,
-    // we'd get content from the file template
-    const content = ""; // TODO: Get from file template
-    await writeFile(change.path, new TextEncoder().encode(content));
+    // Get content from the resolved file template
+    const content =
+      (change.newState?.metadata?.resolvedContent as string) || "";
+
+    // Ensure parent directories exist first
+    const pathParts = change.path.split("/");
+    pathParts.pop(); // Remove filename
+    const parentDir = pathParts.join("/");
+
+    if (parentDir && parentDir !== change.path) {
+      await createDirectoryUtil(parentDir);
+    }
+
+    // Now write the file content
+    await writeFileContentUtil(change.path, content);
   } catch (error) {
     throw new Error(`Failed to create file ${change.path}: ${error}`);
   }
@@ -243,7 +263,7 @@ function createSymlink(change: FileSystemChange): Promise<void> {
  */
 async function removeDirectory(path: string): Promise<void> {
   try {
-    await remove(path, { recursive: true });
+    await deleteFileUtil(path);
   } catch (error) {
     throw new Error(`Failed to remove directory ${path}: ${error}`);
   }
@@ -254,7 +274,7 @@ async function removeDirectory(path: string): Promise<void> {
  */
 async function removeFile(path: string): Promise<void> {
   try {
-    await remove(path);
+    await deleteFileUtil(path);
   } catch (error) {
     throw new Error(`Failed to remove file ${path}: ${error}`);
   }
@@ -265,9 +285,10 @@ async function removeFile(path: string): Promise<void> {
  */
 async function updateFileContent(change: FileSystemChange): Promise<void> {
   try {
-    // TODO: Get new content from file template
-    const content = "";
-    await writeFile(change.path, new TextEncoder().encode(content));
+    // Get content from the resolved file template
+    const content =
+      (change.newState?.metadata?.resolvedContent as string) || "";
+    await writeFileContentUtil(change.path, content);
   } catch (error) {
     throw new Error(`Failed to update file ${change.path}: ${error}`);
   }

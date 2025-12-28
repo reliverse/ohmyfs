@@ -13,8 +13,8 @@ import clipboard from "clipboardy";
  *
  * Options:
  *   --bump [major|minor|patch]  Bump version (defaults to patch if no value)
- *   --target <platform>         Build for specific platform(s) (comma-separated or multiple flags)
- *                               Valid: windows, linux, macos-intel, macos-arm
+ *   --target <extension>        Build for specific file extension(s) (comma-separated or multiple flags)
+ *                               Valid: exe, AppImage, deb, rpm, dmg
  *   --dry-run                   Show what would be done without making changes
  */
 
@@ -27,24 +27,42 @@ const BUILD_TARGETS: BuildTarget[] = [
     name: "windows",
     target: "x86_64-pc-windows-msvc",
     runner: "cargo-xwin",
+    extension: "exe",
     getInstallerName: (version: string) => `ohmyfs_${version}_x64-setup.exe`,
     displayName: "Windows 10/11 64-bit",
   },
   {
     name: "linux",
     target: "x86_64-unknown-linux-gnu",
+    extension: "AppImage",
     getInstallerName: (version: string) => `ohmyfs_${version}_amd64.AppImage`,
+    displayName: "Linux 64-bit",
+  },
+  {
+    name: "linux",
+    target: "x86_64-unknown-linux-gnu",
+    extension: "deb",
+    getInstallerName: (version: string) => `ohmyfs_${version}_amd64.deb`,
+    displayName: "Linux 64-bit",
+  },
+  {
+    name: "linux",
+    target: "x86_64-unknown-linux-gnu",
+    extension: "rpm",
+    getInstallerName: (version: string) => `ohmyfs-${version}-1.x86_64.rpm`,
     displayName: "Linux 64-bit",
   },
   {
     name: "macos-intel",
     target: "x86_64-apple-darwin",
+    extension: "dmg",
     getInstallerName: (version: string) => `ohmyfs_${version}_x64.dmg`,
     displayName: "macOS Intel 64-bit",
   },
   {
     name: "macos-arm",
     target: "aarch64-apple-darwin",
+    extension: "dmg",
     getInstallerName: (version: string) => `ohmyfs_${version}_aarch64.dmg`,
     displayName: "macOS Apple Silicon",
   },
@@ -61,6 +79,7 @@ interface Version {
 interface BuildTarget {
   name: string;
   target: string;
+  extension: string;
   runner?: string;
   getInstallerName: (version: string) => string;
   displayName: string;
@@ -183,26 +202,35 @@ function parseTargets(args: string[]): string[] | undefined {
     return undefined;
   }
 
-  const targets: string[] = [];
+  const extensions: string[] = [];
   for (const index of targetIndices) {
     const targetValue = args[index + 1];
     if (targetValue && !targetValue.startsWith("--")) {
-      // Support comma-separated targets
-      targets.push(...targetValue.split(",").map((t) => t.trim()));
+      // Support comma-separated extensions
+      extensions.push(...targetValue.split(",").map((t) => t.trim()));
     }
   }
 
-  // Validate targets
-  const validTargetNames = BUILD_TARGETS.map((t) => t.name);
-  const invalidTargets = targets.filter((t) => !validTargetNames.includes(t));
-  if (invalidTargets.length > 0) {
+  // Validate extensions
+  const validExtensions = [...new Set(BUILD_TARGETS.map((t) => t.extension))];
+  const invalidExtensions = extensions.filter(
+    (ext) => !validExtensions.includes(ext)
+  );
+  if (invalidExtensions.length > 0) {
     throw new Error(
-      `Invalid target(s): ${invalidTargets.join(", ")}. Valid targets: ${validTargetNames.join(", ")}`
+      `Invalid extension(s): ${invalidExtensions.join(", ")}. Valid extensions: ${validExtensions.join(", ")}`
     );
   }
 
+  // Map extensions to platform names
+  const platforms: string[] = [];
+  for (const ext of extensions) {
+    const matchingPlatforms = BUILD_TARGETS.filter((t) => t.extension === ext);
+    platforms.push(...matchingPlatforms.map((t) => t.name));
+  }
+
   // Remove duplicates
-  return [...new Set(targets)];
+  return [...new Set(platforms)];
 }
 
 function parseBumpType(args: string[]): BumpType | undefined {
@@ -231,26 +259,65 @@ function parseArgs(): {
   bumpType?: BumpType;
   dryRun: boolean;
   targets?: string[];
+  extensions?: string[];
 } {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
   const bumpType = parseBumpType(args);
   const targets = parseTargets(args);
+  const extensions = parseExtensions(args);
 
-  return { bumpType, dryRun, targets };
+  return { bumpType, dryRun, targets, extensions };
+}
+
+function parseExtensions(args: string[]): string[] | undefined {
+  const targetIndices: number[] = [];
+  for (let index = 0; index < args.length; index++) {
+    if (args[index] === "--target") {
+      targetIndices.push(index);
+    }
+  }
+
+  if (targetIndices.length === 0) {
+    return undefined;
+  }
+
+  const extensions: string[] = [];
+  for (const index of targetIndices) {
+    const targetValue = args[index + 1];
+    if (targetValue && !targetValue.startsWith("--")) {
+      // Support comma-separated extensions
+      extensions.push(...targetValue.split(",").map((t) => t.trim()));
+    }
+  }
+
+  // Remove duplicates
+  return [...new Set(extensions)];
 }
 
 async function main() {
   try {
     console.log("🚀 Starting ohmyfs release process...\n");
 
-    const { bumpType, dryRun, targets } = parseArgs();
+    const { bumpType, dryRun, targets, extensions } = parseArgs();
     let finalVersion: string;
 
     // Filter targets to build
-    const targetsToBuild = targets
+    let targetsToBuild = targets
       ? BUILD_TARGETS.filter((target) => targets.includes(target.name))
       : BUILD_TARGETS;
+
+    // Deduplicate platforms by name since multiple extensions can map to the same platform
+    if (targets) {
+      const seen = new Set<string>();
+      targetsToBuild = targetsToBuild.filter((target) => {
+        if (seen.has(target.name)) {
+          return false;
+        }
+        seen.add(target.name);
+        return true;
+      });
+    }
 
     if (dryRun) {
       console.log(
@@ -294,11 +361,15 @@ async function main() {
 
     console.log("\n✅ Release completed successfully!");
 
-    // Generate release content with downloads for built platforms
-    const downloadLinks = targetsToBuild
+    // Generate release content with downloads for requested extensions
+    const targetsForDownload = extensions
+      ? BUILD_TARGETS.filter((target) => extensions.includes(target.extension))
+      : BUILD_TARGETS;
+
+    const downloadLinks = targetsForDownload
       .map(
         (target) =>
-          `- [${target.displayName}](https://github.com/ohmyfs/launcher/releases/download/${finalVersion}/${target.getInstallerName(finalVersion)})`
+          `- [${target.displayName} (${target.extension})](https://github.com/reliverse/ohmyfs/releases/download/${finalVersion}/${target.getInstallerName(finalVersion)})`
       )
       .join("\n");
 

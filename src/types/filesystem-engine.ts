@@ -14,7 +14,7 @@ export interface Variable {
   type: "string" | "number" | "boolean" | "path";
   defaultValue?: unknown;
   description?: string;
-  validation?: z.ZodType<unknown>;
+  validation?: unknown; // Zod schema or unknown for imported definitions
 }
 
 /**
@@ -124,6 +124,7 @@ export interface ResolvedFileSystemNode {
   name: string;
   path: string; // Full resolved path
   originalDefinition: FileSystemDefinition;
+  resolvedContent?: string; // For files: resolved content with variables substituted
   condition?: Condition;
   metadata?: {
     description?: string;

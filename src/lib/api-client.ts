@@ -321,7 +321,6 @@ export function createApiState(config: ApiClientConfig): ApiState {
   };
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Complex retry logic is necessary for robust API client
 async function makeRequest<T = unknown>(
   state: ApiState,
   endpoint: string,
